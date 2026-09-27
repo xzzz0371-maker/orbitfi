@@ -4,9 +4,9 @@ import { useState } from "react";
 import { type Address } from "viem";
 import { useAccount, useWriteContract } from "wagmi";
 import { LendingPoolAbi } from "@/lib/abis";
-import { ADDRESSES, MIN_BORROW, TIERS, COLLATERALS, COLLATERAL_TIER_LTV, COLLATERAL_TIER_LT, TX_GAS, type MarketInfo } from "@/lib/config";
+import { ADDRESSES, MIN_BORROW, TIERS, COLLATERALS, COLLATERAL_TIER_LTV, COLLATERAL_TIER_LT, type MarketInfo } from "@/lib/config";
 import { useUserPositionV2, useMarketStats, useMarketBorrowAprs, useAssetPrices, useInvalidateAllOnTxSuccess } from "@/lib/hooks";
-import { formatToken, formatHealthFactor, numToRaw, rawToNum } from "@/lib/format";
+import { formatToken, formatHealthFactor, numToRaw, parseAmount, rawToNum } from "@/lib/format";
 import { borrowAprAt, borrowAprUpperPct } from "@/lib/rates";
 import { TxStatus } from "./TxStatus";
 
@@ -18,7 +18,7 @@ export function BorrowTab({ market, initialTier }: { market: MarketInfo; initial
   const { stats } = useMarketStats(market.id);
   const borrowAprs = useMarketBorrowAprs(market.id);
   const collTokens = COLLATERALS.map((c) => c.address);
-  const prices = useAssetPrices([...collTokens, market.address]);
+  const { prices, ready: pricesReady } = useAssetPrices([...collTokens, market.address]);
 
   const { data: hash, isPending, isSuccess, writeContract } = useWriteContract();
   useInvalidateAllOnTxSuccess(isSuccess);
@@ -40,29 +40,37 @@ export function BorrowTab({ market, initialTier }: { market: MarketInfo; initial
     0,
   );
 
-  const amountNum = parseFloat(amount);
-  const raw = numToRaw(amountNum, market.decimals);
+  // 以字符串解析（parseUnits）得到提交给合约的金额
+  const raw = parseAmount(amount, market.decimals) ?? 0n;
+  // 以下浮点仅用于展示估算；合约会按链上真实价重新校验
+  const amountNum = raw === 0n ? 0 : Number(raw) / 10 ** market.decimals;
+  const marketPrice = prices[market.address] ?? 0;
   const debtUsd = position ? Number(position.debtWad) / 1e18 : 0;
-  const amountUsd = amountNum * (prices[market.address] ?? 1);
+  const amountUsd = amountNum * marketPrice;
   const newDebtUsd = debtUsd + amountUsd;
+  // 价格不可用时不给可借上限，避免用猜的价给出错误额度
   const maxRaw =
-    capacityUsd > debtUsd
-      ? numToRaw((capacityUsd - debtUsd) / (prices[market.address] ?? 1), market.decimals)
+    pricesReady && marketPrice > 0 && capacityUsd > debtUsd
+      ? numToRaw((capacityUsd - debtUsd) / marketPrice, market.decimals)
       : 0n;
+  const minBorrowRaw = numToRaw(MIN_BORROW, market.decimals);
 
   const projLtv = collValueUsd > 0 ? (newDebtUsd / collValueUsd) * 100 : 0;
   const projHf = weightedLtUsd > 0 && newDebtUsd > 0 ? weightedLtUsd / newDebtUsd : 0;
   const projHfBig = projHf > 0 ? BigInt(Math.floor(projHf * 1e18)) : 0n;
 
   const tierLocked = position && position.tier > 0n && Number(position.tier) !== tier;
-  const valid = amountNum >= MIN_BORROW && raw > 0n && raw <= maxRaw && !tierLocked && collValueUsd > 0;
+  const valid =
+    pricesReady && raw >= minBorrowRaw && raw <= maxRaw && !tierLocked && collValueUsd > 0;
 
   const borrowApr = borrowAprs[tier];
   const utilPct = stats ? (Number(stats.utilization) / 1e18) * 100 : 0;
-  const rangeLow = borrowAprAt(Math.max(0, utilPct - 10), tier);
-  const rangeHigh = borrowAprAt(Math.min(100, utilPct + 10), tier);
-  const range7dLow = Math.max(0, rangeLow - 0.3);
-  const range7dHigh = rangeHigh + 0.3;
+  // 模型区间：当前利用率 ±10% 下的利率范围（不是历史 7 日区间）
+  const utilLowPct = Math.max(0, utilPct - 10);
+  const utilHighPct = Math.min(100, utilPct + 10);
+  const rangeLow = borrowAprAt(utilLowPct, tier);
+  const rangeHigh = borrowAprAt(utilHighPct, tier);
+  const pricesUnavailable = !pricesReady;
 
   return (
     <div className="space-y-4">
@@ -144,9 +152,11 @@ export function BorrowTab({ market, initialTier }: { market: MarketInfo; initial
           </span>
         </div>
         <div className="flex justify-between">
-          <span className="text-slate-500">7D Range (est.)</span>
+          <span className="text-slate-500">
+            Rate range · utilization {utilLowPct.toFixed(0)}–{utilHighPct.toFixed(0)}%
+          </span>
           <span className="text-slate-800">
-            {range7dLow.toFixed(2)}% – {range7dHigh.toFixed(2)}%
+            {rangeLow.toFixed(2)}% – {rangeHigh.toFixed(2)}%
           </span>
         </div>
         <div className="flex justify-between">
@@ -154,8 +164,8 @@ export function BorrowTab({ market, initialTier }: { market: MarketInfo; initial
           <span className="text-slate-800">{utilPct.toFixed(2)}%</span>
         </div>
         <p className="pt-1 text-[11px] text-slate-400">
-          Rates are variable. "Up to" assumes ~90% utilization; 7D ranges are estimated from the
-          current rate model — not historical data.
+          Rates are variable and adjust with pool utilization. "Up to" assumes ~90% utilization;
+          the rate range is the current model evaluated at util ±10% — not historical data.
         </p>
         <div className="flex justify-between">
           <span className="text-slate-500">Collateral value (all)</span>
@@ -181,17 +191,19 @@ export function BorrowTab({ market, initialTier }: { market: MarketInfo; initial
 
       {address && !valid && !isPending && (
         <p className="text-xs text-danger">
-          {tierLocked
-            ? `You are already borrowing at tier ${Number(position?.tier)} — repay in full to switch tiers.`
-            : collValueUsd <= 0
-              ? "No collateral — deposit ETH/cbBTC in the Collateral tab first."
-              : raw <= 0n
-                ? `Enter an amount of at least ${MIN_BORROW} ${market.symbol}.`
-                : raw > maxRaw
-                  ? `Amount exceeds max borrowable (${formatToken(maxRaw, market.decimals)} ${market.symbol}).`
-                  : maxRaw > 0n && maxRaw < numToRaw(MIN_BORROW, market.decimals)
-                    ? `Max borrowable (${formatToken(maxRaw, market.decimals)} ${market.symbol}) is below the ${MIN_BORROW} ${market.symbol} minimum — add collateral or choose a higher LTV tier.`
-                    : "Check your inputs."}
+          {pricesUnavailable
+            ? "Price unavailable (oracle paused / feed stale / address not configured) — borrowing is disabled rather than guessing a price."
+            : tierLocked
+              ? `You are already borrowing at tier ${Number(position?.tier)} — repay in full to switch tiers.`
+              : collValueUsd <= 0
+                ? "No collateral — deposit ETH/cbBTC in the Collateral tab first."
+                : raw < minBorrowRaw
+                  ? `Enter an amount of at least ${MIN_BORROW} ${market.symbol}.`
+                  : raw > maxRaw
+                    ? `Amount exceeds max borrowable (${formatToken(maxRaw, market.decimals)} ${market.symbol}).`
+                    : maxRaw > 0n && maxRaw < minBorrowRaw
+                      ? `Max borrowable (${formatToken(maxRaw, market.decimals)} ${market.symbol}) is below the ${MIN_BORROW} ${market.symbol} minimum — add collateral or choose a higher LTV tier.`
+                      : "Check your inputs."}
         </p>
       )}
 
@@ -204,7 +216,6 @@ export function BorrowTab({ market, initialTier }: { market: MarketInfo; initial
             abi: LendingPoolAbi,
             functionName: "borrow",
             args: [BigInt(market.id), raw, BigInt(tier)],
-gas: TX_GAS,
           })
         }
       >

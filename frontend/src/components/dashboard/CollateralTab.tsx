@@ -4,9 +4,9 @@ import { useState } from "react";
 import { type Address } from "viem";
 import { useAccount, useBalance, useWriteContract } from "wagmi";
 import { LendingPoolAbi, MockTokenAbi } from "@/lib/abis";
-import { ADDRESSES, COLLATERALS, MIN_COLLATERAL_TOKENS, MAX_UINT, TX_GAS, ETH, type CollateralInfo } from "@/lib/config";
+import { ADDRESSES, COLLATERALS, MIN_COLLATERAL_TOKENS, ETH, type CollateralInfo } from "@/lib/config";
 import { useUserPositionV2, useTokenBalance, useTokenAllowance, useInvalidateAllOnTxSuccess } from "@/lib/hooks";
-import { formatToken, formatUsd, numToRaw, rawToNum } from "@/lib/format";
+import { formatToken, formatUsd, numToRaw, parseAmount, rawToNum } from "@/lib/format";
 import { TxStatus } from "./TxStatus";
 
 function CollateralRow({
@@ -16,12 +16,13 @@ function CollateralRow({
 }: {
   coll: CollateralInfo;
   deposited: bigint;
-  priceUsd: number;
+  /// undefined = 价格不可用（不得用 0 冒充，否则会显示成 $0 抵押）
+  priceUsd: number | undefined;
 }) {
   const { address } = useAccount();
   const [amount, setAmount] = useState("");
-  const amountNum = parseFloat(amount);
-  const raw = numToRaw(amountNum, coll.decimals);
+  // 以字符串解析，避免浮点误差
+  const raw = parseAmount(amount, coll.decimals) ?? 0n;
 
   const ercBalance = useTokenBalance(
     coll.native ? undefined : (coll.address as Address),
@@ -40,10 +41,11 @@ function CollateralRow({
   useInvalidateAllOnTxSuccess(isSuccess);
 
   const minRaw = numToRaw(MIN_COLLATERAL_TOKENS, coll.decimals);
-  const depositValid = amountNum >= MIN_COLLATERAL_TOKENS && raw > 0n && raw <= balance;
+  const depositValid = raw >= minRaw && raw <= balance;
   const withdrawValid = raw > 0n && raw <= deposited;
 
-  const valueUsd = rawToNum(deposited, coll.decimals) * priceUsd;
+  const valueUsd =
+    priceUsd === undefined ? undefined : rawToNum(deposited, coll.decimals) * priceUsd;
 
   return (
     <div className="rounded-xl bg-white/60 p-3 ring-1 ring-slate-200/60">
@@ -53,7 +55,8 @@ function CollateralRow({
           <span className="text-xs text-slate-400">{coll.name}</span>
         </div>
         <span className="text-xs text-slate-500">
-          Deposited {formatToken(deposited, coll.decimals, 4)} · {formatUsd(valueUsd)}
+          Deposited {formatToken(deposited, coll.decimals, 4)} ·{" "}
+          {valueUsd === undefined ? "--" : formatUsd(valueUsd)}
         </span>
       </div>
       <div className="mt-2 flex gap-2">
@@ -82,8 +85,8 @@ function CollateralRow({
                 address: coll.address as Address,
                 abi: MockTokenAbi,
                 functionName: "approve",
-                args: [ADDRESSES.lendingPool as Address, MAX_UINT],
-gas: TX_GAS,
+                // 精确授权：只授权本次金额，避免无限授权扩大攻击面
+                args: [ADDRESSES.lendingPool as Address, raw],
               })
             }
           >
@@ -101,14 +104,12 @@ gas: TX_GAS,
                     functionName: "supplyCollateral",
                     args: [],
                     value: raw,
-gas: TX_GAS,
                   })
                 : writeContract({
                     address: ADDRESSES.lendingPool as Address,
                     abi: LendingPoolAbi,
                     functionName: "supplyCollateral",
                     args: [coll.address as Address, raw],
-gas: TX_GAS,
                   })
             }
           >
@@ -124,7 +125,6 @@ gas: TX_GAS,
               abi: LendingPoolAbi,
               functionName: "withdrawCollateral",
               args: [coll.address as Address, raw],
-gas: TX_GAS,
             })
           }
         >
@@ -147,7 +147,13 @@ gas: TX_GAS,
   );
 }
 
-export function CollateralTab({ prices }: { prices: Record<string, number> }) {
+export function CollateralTab({
+  prices,
+  pricesReady,
+}: {
+  prices: Record<string, number>;
+  pricesReady: boolean;
+}) {
   const { address } = useAccount();
   const { position } = useUserPositionV2(address as Address);
   void ETH;
@@ -157,12 +163,17 @@ export function CollateralTab({ prices }: { prices: Record<string, number> }) {
         Deposit ETH or cbBTC as collateral. Collateral is shared across all borrow markets
         (USDC / USDT / DAI). LTV &amp; liquidation thresholds are calibrated per asset.
       </div>
+      {!pricesReady && (
+        <div className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700 ring-1 ring-red-200">
+          Price feed unavailable — USD values are hidden instead of shown as $0.
+        </div>
+      )}
       {COLLATERALS.map((c) => (
         <CollateralRow
           key={c.id}
           coll={c}
           deposited={position?.collateral[c.id] ?? 0n}
-          priceUsd={prices[c.address] ?? 0}
+          priceUsd={pricesReady ? prices[c.address] : undefined}
         />
       ))}
     </div>

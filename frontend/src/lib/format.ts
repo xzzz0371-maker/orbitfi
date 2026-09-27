@@ -1,5 +1,7 @@
 // Number / address formatting helpers (USDC 6-dec, ETH 18-dec, WAD 1e18).
 
+import { parseUnits } from "viem";
+
 const POW10 = (dec: number): bigint => 10n ** BigInt(dec);
 
 export function rawToNum(raw: bigint | undefined | null, decimals = 6): number {
@@ -7,6 +9,21 @@ export function rawToNum(raw: bigint | undefined | null, decimals = 6): number {
   return Number(raw) / Number(POW10(decimals));
 }
 
+/// 把用户输入的十进制字符串解析为原始单位 bigint；非法输入或 ≤0 返回 null。
+/// 新增：替代 numToRaw 的浮点路径（`Math.floor(n * 10**decimals)` 在 18 位精度下
+/// 会有 1 wei 级误差，且无法表达超过 2^53 的精确值）。
+export function parseAmount(input: string, decimals = 6): bigint | null {
+  const s = input.trim();
+  if (!s) return null;
+  try {
+    const v = parseUnits(s, decimals);
+    return v > 0n ? v : null;
+  } catch {
+    return null; // 非法字符 / 小数位超出精度
+  }
+}
+
+/// @deprecated 仅用于纯展示常量。金额解析请用 parseAmount(input, decimals)。
 export function numToRaw(n: number, decimals = 6): bigint {
   if (!isFinite(n) || n <= 0) return 0n;
   return BigInt(Math.floor(n * Number(POW10(decimals))));

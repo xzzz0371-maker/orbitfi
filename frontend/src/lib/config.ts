@@ -6,13 +6,25 @@ const deployments = deploymentsRaw as any;
 // deployments/base.json after real deployment; empty = not yet deployed.
 export const CHAIN_ID = 8453;
 export const ETH_ADDRESS = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
+// ⚠️ 以下两个常量已停用，保留仅为兼容历史引用：
+// - MAX_UINT：原用于 approve(MAX_UINT) 无限授权，现全部改为按本次金额精确授权。
+// - TX_GAS：原给所有写交易硬编码 gas 上限，会绕过钱包估算并在市场数增长后有 OOG 风险；
+//           现已移除 writeContract 的 gas 字段，交由钱包估算（EIP-1559 只按实际用量收费）。
 export const MAX_UINT =
   115792089237316195423570985008687907853269984665640564039457584007913129639935n;
-// 池内函数含时间型利息累计与多市场健康检查，gas 波动大；给宽裕上限避免估算差导致 OOG（EIP-1559 只按实际用量收费）。
 export const TX_GAS = 1_000_000n;
+
+// 唯一价格源。主网由 DeployMainnet 部署的是 ChainlinkOracle（脚本明确「不部署 SwitchableOracle」）；
+// 测试网历史部署可能只有 switchableOracle，故按此优先级回落。
+// ⚠️ 任何组件都不得再直接引用 ADDRESSES.switchableOracle 作为价格源。
+const rawPriceOracle: string = deployments.oracle || deployments.switchableOracle || "";
+export const PRICE_ORACLE = rawPriceOracle;
+export const PRICE_ORACLE_READY = /^0x[0-9a-fA-F]{40}$/.test(rawPriceOracle);
 
 export const ADDRESSES = {
   lendingPool: deployments.lendingPool,
+  // ↓ 价格源唯一入口
+  priceOracle: rawPriceOracle,
   usdc: deployments.usdc,
   usdt: deployments.usdt,
   dai: deployments.dai,
@@ -36,9 +48,10 @@ export const ETHERSCAN_URL = "https://basescan.org";
 // WalletConnect project id (optional). Set NEXT_PUBLIC_WC_PROJECT_ID to enable WalletConnect.
 export const WC_PROJECT_ID = process.env.NEXT_PUBLIC_WC_PROJECT_ID;
 
-// Fallback ETH/USD price used when the on-chain oracle read fails (e.g. feed stale/paused).
-// Demo fallback only; the app tries the live oracle first. (Base ETH/USD feed ~$2506, 2026-09.)
-export const FALLBACK_ETH_PRICE = 2506;
+// 已移除 FALLBACK_ETH_PRICE。
+// 原实现在预言机读价失败时静默回落到硬编码的 $2506，会让 UI 展示的 LTV / Health Factor
+// 与链上真实值不一致，误导用户在错误的时点加仓或减仓。价格读不到时必须显式报错并禁用
+// 依赖价格的操作（fail-closed），不允许猜价。
 export const USDC_DECIMALS = 6;
 export const ETH_DECIMALS = 18;
 export const WAD = 1_000_000_000_000_000_000n;
@@ -104,6 +117,10 @@ export const SCALE = 1_000_000_000_000_000_000n; // 1e18 (WAD)
 
 // Per-collateral LTV / liquidation thresholds (mirrors RiskManager V2).
 // tiers 1..5 → maxLTV % and liquidation threshold %.
+// ⚠️ 以下两表为「展示用快照」，当前值与链上 RiskManager 构造/部署时设的档位一致。
+// 它们不是权威来源：治理一旦通过 RiskManager.setTier 改档，这里就会失真。
+// 待办（未做，优先级低于上线门禁）：改为从 RiskManager.getMaxLTV /
+// getLiquidationThreshold 链上读取，并在读不到时禁用借款。
 export const COLLATERAL_TIER_LTV: Record<string, number[]> = {
   ETH: [50, 60, 70, 75, 80],
   cbBTC: [45, 55, 65, 70, 75],

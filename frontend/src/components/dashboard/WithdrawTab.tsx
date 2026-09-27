@@ -4,9 +4,9 @@ import { useState } from "react";
 import { type Address } from "viem";
 import { useAccount, useWriteContract } from "wagmi";
 import { LendingPoolAbi } from "@/lib/abis";
-import { ADDRESSES, TX_GAS, type MarketInfo } from "@/lib/config";
+import { ADDRESSES, type MarketInfo } from "@/lib/config";
 import { useMarketStats, useUserSharesOf, useInvalidateAllOnTxSuccess } from "@/lib/hooks";
-import { formatToken, numToRaw, rawToNum } from "@/lib/format";
+import { formatToken, parseAmount, rawToDisplayString } from "@/lib/format";
 import { TxStatus } from "./TxStatus";
 
 export function WithdrawTab({ market }: { market: MarketInfo }) {
@@ -18,8 +18,7 @@ export function WithdrawTab({ market }: { market: MarketInfo }) {
   const { data: hash, isPending, isSuccess, writeContract } = useWriteContract();
   useInvalidateAllOnTxSuccess(isSuccess);
 
-  const amountNum = parseFloat(amount);
-  const raw = numToRaw(amountNum, market.decimals);
+  const raw = parseAmount(amount, market.decimals) ?? 0n;
   // shares = rawToken * WAD / supplyIndex
   const sharesNeeded =
     raw > 0n && stats && stats.supplyIndex > 0n ? (raw * BigInt(1e18)) / stats.supplyIndex : 0n;
@@ -46,7 +45,7 @@ export function WithdrawTab({ market }: { market: MarketInfo }) {
           />
           <button
             className="btn-outline whitespace-nowrap"
-            onClick={() => setAmount(rawToNum(withdrawable, market.decimals).toString())}
+            onClick={() => setAmount(rawToDisplayString(withdrawable, market.decimals))}
           >
             Max
           </button>
@@ -81,7 +80,6 @@ export function WithdrawTab({ market }: { market: MarketInfo }) {
             abi: LendingPoolAbi,
             functionName: "withdraw",
             args: [BigInt(market.id), sharesNeeded],
-gas: TX_GAS,
           })
         }
       >

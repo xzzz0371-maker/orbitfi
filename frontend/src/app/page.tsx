@@ -1,6 +1,6 @@
 "use client";
 
-import { usePoolStats, useBorrowAprs, usePrices, useMarketStats, useMarketBorrowAprs } from "@/lib/hooks";
+import { usePoolStats, useBorrowAprs, useMarketStats, useMarketBorrowAprs } from "@/lib/hooks";
 import { RiskCard } from "@/components/RiskCard";
 import { UtilizationRing } from "@/components/UtilizationRing";
 import { RateCurve } from "@/components/RateCurve";
@@ -72,11 +72,9 @@ function MarketCard({ market }: { market: MarketInfo }) {
 export default function HomePage() {
   const { stats, isPending } = usePoolStats();
   const borrowAprs = useBorrowAprs();
-  const { ethUsd } = usePrices();
 
   const supplyAprPct = stats ? (Number(stats.supplyApr) / 1e18) * 100 : 0;
   const utilPct = stats ? (Number(stats.utilization) / 1e18) * 100 : 0;
-  const supply7d = supplyAprPct * (0.96 + (supplyAprPct % 0.08) / 100);
 
   return (
     <div className="space-y-12">

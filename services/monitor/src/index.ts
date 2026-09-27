@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import type { Address } from "viem";
 
-import { init, loadDeployments } from "./rpc.js";
+import { init, loadDeployments, resolveDeploymentsPath, abiFor, tryRead } from "./rpc.js";
 import { checkPosition, snapshotMarket, utilization, reserveBalanceOf, assetPrice, describeHf, describeMarket } from "./checkers.js";
 import { AlertStore, notifyWebhook, notifyTelegram } from "./alerts.js";
 import { appendLine, touchFile, nowIso, WAD } from "./util.js";
@@ -29,9 +29,8 @@ async function main() {
     console.error("RPC_URL missing");
     process.exit(1);
   }
-  const deploymentsPath = path.resolve(
-    envOr("DEPLOYMENTS", "../frontend/src/lib/deployments/base.json")
-  );
+  // 未设 DEPLOYMENTS 时用包内默认路径（不依赖 CWD）；设了则按 CWD 解析
+  const deploymentsPath = resolveDeploymentsPath(process.env.DEPLOYMENTS);
   const outDir = path.resolve(envOr("OUT_DIR", "./out"));
   touchFile(path.join(outDir, ".keep"));
 
@@ -41,6 +40,17 @@ async function main() {
   const rm = d.reserveManager;
   const oracle = d.oracle;
   const cfg = loadCfg();
+  // 空名单守卫：协议已移除事件（EIP-170），监控完全依赖 positions.json 的 users 列表。
+  // 名单为空时监控"盯 0 个仓位"但仍输出全绿，会制造虚假安全感 → 必须显式确认才允许空跑。
+  if (cfg.users.length === 0) {
+    const msg =
+      "positions.json 的 users 为空 —— 监控不会发现任何可清算仓位，输出全绿不代表协议健康。";
+    if (envOr("ALLOW_EMPTY_WATCHLIST", "") !== "1") {
+      console.error(`${msg}\n如确需空跑（例如仅验证 RPC 连通性），请设 ALLOW_EMPTY_WATCHLIST=1。`);
+      process.exit(1);
+    }
+    console.warn(`${msg} 已按 ALLOW_EMPTY_WATCHLIST=1 继续空跑。`);
+  }
   const pollSec = parseInt(envOr("POLL_SECONDS", "60"), 10);
   const loop = process.argv.includes("--loop");
 
@@ -55,7 +65,7 @@ async function main() {
     appendLine(alertsFile, a);
     notifyWebhook(webhookUrl, a);
     notifyTelegram(tgToken, tgChat, a);
-  });
+  }, parseInt(envOr("ALERT_RENOTIFY_MINUTES", "15"), 10) * 60_000);
 
   console.log(`monitor: pool=${pool} rm=${rm} oracle=${oracle} loop=${loop} interval=${pollSec}s`);
 
@@ -131,6 +141,24 @@ async function main() {
         alerts.set(`oracle-${m.symbol}`, "CRITICAL", true, `oracle price for ${m.symbol} unavailable/stale`);
       } else {
         alerts.set(`oracle-${m.symbol}`, "CRITICAL", false, "");
+      }
+    }
+
+    // ---- oracle 偏差基准 ----
+    // lastValidPrice 仅在 updatePrice() 且判定为非异常时写入。若为 0，ChainlinkOracle 的
+    // maxDeviation 保护永不触发（等于没有偏差熔断）。部署脚本会初始化一次，之后需要 keeper
+    // 周期性调用 oracle.updatePrice(asset) 刷新；这里在归零时告警。
+    for (const a of [...cfg.collaterals, ...cfg.markets]) {
+      const base = await tryRead(oracle, abiFor("ChainlinkOracle"), "lastValidPrice", [a.token]);
+      if (base === null || (base as bigint) === 0n) {
+        alerts.set(
+          `oracle-base-${a.symbol}`,
+          "CRITICAL",
+          true,
+          `${a.symbol} deviation baseline unprimed (lastValidPrice=0) -> maxDeviation protection is inert; call oracle.updatePrice()`,
+        );
+      } else {
+        alerts.set(`oracle-base-${a.symbol}`, "CRITICAL", false, "");
       }
     }
 

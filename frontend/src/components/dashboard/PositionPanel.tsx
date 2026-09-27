@@ -8,9 +8,12 @@ import { rawToNum, formatToken, formatUsd } from "@/lib/format";
 export function PositionPanel({
   position,
   prices,
+  pricesReady,
 }: {
   position?: PositionV2;
   prices: Record<string, number>;
+  /// false = 价格不可用：不得用 0 冒充，改为显示 "--"
+  pricesReady: boolean;
 }) {
   if (!position) {
     return (
@@ -33,7 +36,8 @@ export function PositionPanel({
 
   const collRows = COLLATERALS.map((c) => {
     const bal = rawToNum(position.collateral[c.id] ?? 0n, c.decimals);
-    const val = bal * (prices[c.address] ?? 0);
+    const px = pricesReady ? prices[c.address] : undefined;
+    const val = px === undefined ? undefined : bal * px;
     return { ...c, bal, val };
   });
 
@@ -62,7 +66,9 @@ export function PositionPanel({
               {c.symbol}
               <span className="ml-2 text-xs text-slate-400">{c.bal > 0 ? formatToken(position.collateral[c.id] ?? 0n, c.decimals, 4) : "--"}</span>
             </span>
-            <span className="font-semibold text-slate-800">{c.val > 0 ? formatUsd(c.val) : "--"}</span>
+            <span className="font-semibold text-slate-800">
+              {c.val === undefined ? "--" : formatUsd(c.val)}
+            </span>
           </div>
         ))}
       </div>

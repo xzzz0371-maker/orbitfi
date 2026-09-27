@@ -24,19 +24,22 @@ const HEAT: Record<string, { bg: string; text: string; label: string }> = {
 export default function StressTestPage() {
   const { address, isConnected } = useAccount();
   const { position } = useUserPosition(address as Address);
-  const { ethUsd } = usePrices();
+  const { ethUsd, unavailable } = usePrices();
   const s0 = useMarketStats(0);
   const s1 = useMarketStats(1);
   const s2 = useMarketStats(2);
   const [drop, setDrop] = useState(30);
+
+  // 价格不可用时用 0 占位仅为满足 hook/计算顺序；渲染前会提前返回，绝不会把这些数展示出去。
+  const price = ethUsd ?? 0;
 
   const collateralEth = position ? Number(position.collateral) / 1e18 : 10;
   const debtUsdc = position ? Number(position.debt) / 1e18 : 24000;
   const tier = position && position.tier > 0n ? Number(position.tier) : 5;
   const cfg = TIERS.find((t) => t.tier === tier)!;
 
-  const priceAfter = ethUsd * (1 - drop / 100);
-  const collateralUsd = collateralEth * ethUsd;
+  const priceAfter = price * (1 - drop / 100);
+  const collateralUsd = collateralEth * price;
   const collateralUsdAfter = collateralEth * priceAfter;
   const ltvAfter = (debtUsdc / collateralUsdAfter) * 100;
   const hfAfter = (collateralUsdAfter * (cfg.lt / 100)) / debtUsdc;
@@ -62,14 +65,34 @@ export default function StressTestPage() {
       TIERS.map((r) => ({
         ...r,
         cells: DROPS.map((d) => {
-          const cv = collateralEth * ethUsd * (1 - d / 100);
+          const cv = collateralEth * price * (1 - d / 100);
           const debtForTier = collateralUsd * (r.ltv / 100);
           const hf = (cv * (r.lt / 100)) / (debtForTier || 1);
           return statusOf(hf);
         }),
       })),
-    [collateralEth, collateralUsd, ethUsd],
+    [collateralEth, collateralUsd, price],
   );
+
+  // 价格不可用：直接停用，而不是拿硬编码价/0 去算出一组假的安全结论
+  if (unavailable || ethUsd === undefined) {
+    return (
+      <div className="space-y-8">
+        <div>
+          <h1 className="font-display text-3xl font-bold text-slate-900">Stress Test</h1>
+          <p className="mt-1 text-sm text-slate-500">
+            Simulate an ETH price drop and see how your position and the pool react. Off-chain
+            simulation — nothing is broadcast.
+          </p>
+        </div>
+        <div className="card p-6 text-sm text-red-700 ring-1 ring-red-200">
+          <span className="font-semibold">Price feed unavailable.</span> The stress test needs a live
+          ETH price (oracle paused, feed stale, or the contract address is not configured). It is
+          disabled rather than computed from a stale hard-coded value.
+        </div>
+      </div>
+    );
+  }
 
   const statusColor =
     status === "safe" ? "#059669" : status === "warning" ? "#b45309" : "#dc2626";
@@ -121,7 +144,7 @@ export default function StressTestPage() {
           </div>
         </div>
         <div className="mt-4 text-sm text-slate-500">
-          Current ETH: <span className="font-semibold text-slate-800">${ethUsd.toLocaleString("en-US")}</span> →{" "}
+          Current ETH: <span className="font-semibold text-slate-800">${price.toLocaleString("en-US")}</span> →{" "}
           <span className="font-semibold text-red-600">${priceAfter.toLocaleString("en-US")}</span>
         </div>
         {!isConnected && (

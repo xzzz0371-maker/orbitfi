@@ -7,7 +7,9 @@
   "scripts": {
     "build": "tsc --noEmit",
     "watch": "tsx src/index.ts --loop",
-    "once": "tsx src/index.ts"
+    "once": "tsx src/index.ts",
+    "keeper": "tsx src/keeper.ts --once",
+    "keeper:loop": "tsx src/keeper.ts"
   },
   "devDependencies": {
     "@types/node": "^20.14.0",

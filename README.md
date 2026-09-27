@@ -56,12 +56,20 @@ forge test --match-contract ForkMainnet -vvv --fork-url https://mainnet.base.org
 
 ## Mainnet Deployment (Base · chainId 8453)
 
-1. Create a Safe multisig (official addresses verified in `docs/主网多签与权限收口手册.md`)
+1. Create a Safe multisig (official addresses in `docs/主网多签与权限收口手册.md`)
 2. `forge script script/DeployMainnet.s.sol:DeployMainnet --rpc-url ... --broadcast`
-3. `forge script script/MainnetDeployAndTransfer.s.sol:MainnetDeployAndTransfer --rpc-url ... --broadcast` (permission handover)
-4. On-chain manual verification (script Step 10/11)
+3. On-chain verification (see `docs/上链差距清单_2026-09-15.md` §3.1 for the exact `cast` checks)
 
-> Always dry-run on a fork before deploying; the handover script does **no** deployment, only role transfer & revoke.
+> ⚠️ **`DeployMainnet.s.sol` performs the full handover itself** — it grants `PARAM_ADMIN` /
+> `PAUSER` / `DEFAULT_ADMIN` to the multisig (or Timelock), transfers `Ownable` ownership of
+> IRM / RiskManager / ReserveManager, then `renounceRole`s the deployer. **Do not run
+> `MainnetDeployAndTransfer.s.sol` afterwards**: the deployer no longer holds any role, so it
+> would revert with `AccessControlUnauthorizedAccount` (the handover has *already succeeded*).
+> That script is only for deployments that did **not** hand over (e.g. the testnet `Deploy.s.sol`).
+
+> Always dry-run on a fork before deploying. Note that a dry run still executes
+> `_writeJson`, so point it at a scratch path:
+> `MAINNET_DEPLOYMENTS_OUT=./deployments/dryrun_fork.json`.
 
 ## Docs
 

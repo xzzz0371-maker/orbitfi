@@ -5,7 +5,7 @@ import { Suspense, useState } from "react";
 import { type Address } from "viem";
 import { useAccount, useWriteContract } from "wagmi";
 import { MockTokenAbi } from "@/lib/abis";
-import { ADDRESSES, BORROW_MARKETS, COLLATERALS, TX_GAS } from "@/lib/config";
+import { ADDRESSES, BORROW_MARKETS, COLLATERALS } from "@/lib/config";
 import { useUserPositionV2, useAssetPrices, useInvalidateAllOnTxSuccess } from "@/lib/hooks";
 import { numToRaw } from "@/lib/format";
 import { PositionPanel } from "@/components/dashboard/PositionPanel";
@@ -35,7 +35,7 @@ function DashboardInner() {
   const market = BORROW_MARKETS.find((m) => m.id === marketId) ?? BORROW_MARKETS[0];
   const { position } = useUserPositionV2(address as Address);
   const allTokens = [...COLLATERALS.map((c) => c.address), ...BORROW_MARKETS.map((m) => m.address)];
-  const prices = useAssetPrices(allTokens);
+  const { prices, ready: pricesReady } = useAssetPrices(allTokens);
   const { data: faucetHash, isPending: faucetPending, isSuccess: faucetSuccess, writeContract: faucet } = useWriteContract();
   useInvalidateAllOnTxSuccess(faucetSuccess);
 
@@ -78,6 +78,15 @@ function DashboardInner() {
       </div>
       <TxStatus hash={faucetHash} />
 
+      {!pricesReady && (
+        <div className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700 ring-1 ring-red-200">
+          <span className="font-semibold">Price feed unavailable.</span> The on-chain oracle read
+          failed (oracle paused, feed stale, or the contract address is not configured). Collateral
+          values, LTV and Health Factor cannot be shown, and price-dependent actions are disabled.
+          Do not act on the numbers below.
+        </div>
+      )}
+
       {/* Market selector */}
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-sm font-semibold text-slate-600">Borrow market:</span>
@@ -98,7 +107,7 @@ function DashboardInner() {
 
       <div className="grid gap-6 lg:grid-cols-5">
         <div className="lg:col-span-2">
-          <PositionPanel position={position} prices={prices} />
+          <PositionPanel position={position} prices={prices} pricesReady={pricesReady} />
         </div>
         <div className="lg:col-span-3">
           <div className="card p-6">
@@ -119,7 +128,7 @@ function DashboardInner() {
             {tab === 1 && <WithdrawTab key={market.id} market={market} />}
             {tab === 2 && <BorrowTab key={market.id} market={market} initialTier={initialTier} />}
             {tab === 3 && <RepayTab key={market.id} market={market} />}
-            {tab === 4 && <CollateralTab prices={prices} />}
+            {tab === 4 && <CollateralTab prices={prices} pricesReady={pricesReady} />}
           </div>
         </div>
       </div>

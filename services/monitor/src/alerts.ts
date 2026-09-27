@@ -6,25 +6,37 @@ export interface Alert {
   at: string;
 }
 
+/**
+ * 告警去抖 + 重复提醒。
+ * - 边沿触发：状态 false→true 时立即推送一次。
+ * - 重复提醒：只要状态仍为 true，每 reNotifyMs 再推一次（默认 15 分钟）。
+ *   原实现只推一次，运维漏看那一条 CRITICAL 后就再无提示（可清算仓位会一直躺在那里）。
+ *   设 reNotifyMs = 0 可退回旧的"只推一次"行为。
+ */
 export class AlertStore {
   private prev = new Map<string, boolean>();
-  private out: (a: Alert) => void;
+  private lastSent = new Map<string, number>();
 
-  constructor(out: (a: Alert) => void) {
-    this.out = out;
-  }
+  constructor(
+    private out: (a: Alert) => void,
+    private reNotifyMs = 15 * 60_000,
+  ) {}
 
-  /** Set current boolean state of `key`; emits alert only when `state` flips to true (or first seen true). */
   set(key: string, level: Alert["level"], active: boolean, message: string): void {
-    const prev = this.prev.get(key) ?? false;
-    if (active && !prev) {
+    const was = this.prev.get(key) ?? false;
+    const now = Date.now();
+    const last = this.lastSent.get(key) ?? 0;
+    if (active && (!was || (this.reNotifyMs > 0 && now - last >= this.reNotifyMs))) {
       this.out({ level, key, message, at: new Date().toISOString() });
+      this.lastSent.set(key, now);
     }
+    if (!active) this.lastSent.delete(key);
     this.prev.set(key, active);
   }
 
   reset(): void {
     this.prev.clear();
+    this.lastSent.clear();
   }
 }
 

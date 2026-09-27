@@ -4,8 +4,8 @@ import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useReadContract, useReadContracts } from "wagmi";
 import { type Address } from "viem";
-import { LendingPoolAbi, SwitchableOracleAbi } from "./abis";
-import { ADDRESSES, ETH_ADDRESS, FALLBACK_ETH_PRICE } from "./config";
+import { LendingPoolAbi, PriceOracleAbi } from "./abis";
+import { ADDRESSES, ETH_ADDRESS, PRICE_ORACLE, PRICE_ORACLE_READY } from "./config";
 import { TIERS } from "./config";
 
 const pool = { address: ADDRESSES.lendingPool as Address, abi: LendingPoolAbi } as const;
@@ -129,31 +129,32 @@ export function useMaxBorrowable(user: Address | undefined, tier: number) {
 }
 
 export interface Prices {
-  ethUsd: number;
-  usdcUsd: number;
-  loading: boolean;
+  /// undefined = 价格不可用（地址未配置 / feed 陈旧 / oracle 暂停）。此时禁止参与任何计算。
+  ethUsd: number | undefined;
+  usdcUsd: number | undefined;
+  unavailable: boolean;
 }
 
-
-// Reads ETH/USD from the switchable oracle with a demo fallback if the feed is unavailable.
+// 从唯一价格源（主网 = ChainlinkOracle）读价。读不到就返回 undefined，绝不回落硬编码价。
 export function usePrices(): Prices {
+  const enabled = PRICE_ORACLE_READY;
   const { data: ethRaw } = useReadContract({
-    address: ADDRESSES.switchableOracle as Address,
-    abi: SwitchableOracleAbi,
+    address: PRICE_ORACLE as Address,
+    abi: PriceOracleAbi,
     functionName: "getAssetPrice",
     args: [ETH_ADDRESS as Address],
-    query: { refetchInterval: 30_000, refetchIntervalInBackground: true, retry: false },
+    query: { enabled, refetchInterval: 30_000, refetchIntervalInBackground: true, retry: false },
   });
   const { data: usdcRaw } = useReadContract({
-    address: ADDRESSES.switchableOracle as Address,
-    abi: SwitchableOracleAbi,
+    address: PRICE_ORACLE as Address,
+    abi: PriceOracleAbi,
     functionName: "getAssetPrice",
     args: [ADDRESSES.usdc as Address],
-    query: { refetchInterval: 30_000, refetchIntervalInBackground: true, retry: false },
+    query: { enabled, refetchInterval: 30_000, refetchIntervalInBackground: true, retry: false },
   });
-  const ethUsd = ethRaw !== undefined && ethRaw !== null ? Number(ethRaw) / 1e8 : FALLBACK_ETH_PRICE;
-  const usdcUsd = usdcRaw !== undefined && usdcRaw !== null ? Number(usdcRaw) / 1e8 : 1;
-  return { ethUsd, usdcUsd, loading: false };
+  const ethUsd = ethRaw != null && ethRaw > 0n ? Number(ethRaw) / 1e8 : undefined;
+  const usdcUsd = usdcRaw != null && usdcRaw > 0n ? Number(usdcRaw) / 1e8 : undefined;
+  return { ethUsd, usdcUsd, unavailable: ethUsd === undefined || usdcUsd === undefined };
 }
 
 export function useUsdcBalance(user: Address | undefined) {
@@ -263,25 +264,27 @@ export function useUserSharesOf(user: Address | undefined, marketId: number) {
 }
 
 // Reads USD price (8-decimals → float) for a list of asset addresses.
-export function useAssetPrices(addresses: string[]): Record<string, number> {
+// ready=false 表示不能对外展示这些价（地址未配置，或任一资产取不到有效价）→ 调用方必须 fail-closed。
+export function useAssetPrices(addresses: string[]): { prices: Record<string, number>; ready: boolean } {
   const { data } = useReadContracts({
     contracts: addresses.map((a) => ({
-      address: ADDRESSES.switchableOracle as Address,
-      abi: SwitchableOracleAbi,
+      address: PRICE_ORACLE as Address,
+      abi: PriceOracleAbi,
       functionName: "getAssetPrice",
       args: [a as Address],
     })),
-    query: { refetchInterval: 30_000, refetchIntervalInBackground: true, retry: false },
+    query: { enabled: PRICE_ORACLE_READY, refetchInterval: 30_000, refetchIntervalInBackground: true, retry: false },
   });
   const d = data as unknown as Array<{ result?: bigint }> | undefined;
   const out: Record<string, number> = {};
   if (d) {
     addresses.forEach((a, i) => {
       const raw = d[i]?.result;
-      out[a] = raw !== undefined && raw !== null ? Number(raw) / 1e8 : 0;
+      if (raw != null && raw > 0n) out[a] = Number(raw) / 1e8;
     });
   }
-  return out;
+  const ready = PRICE_ORACLE_READY && addresses.length > 0 && addresses.every((a) => out[a] !== undefined);
+  return { prices: out, ready };
 }
 
 export interface PositionV2 {

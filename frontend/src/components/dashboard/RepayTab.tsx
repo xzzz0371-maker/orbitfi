@@ -4,14 +4,19 @@ import { useState } from "react";
 import { type Address } from "viem";
 import { useAccount, useWriteContract } from "wagmi";
 import { LendingPoolAbi, MockTokenAbi } from "@/lib/abis";
-import { ADDRESSES, MAX_UINT, TX_GAS, type MarketInfo } from "@/lib/config";
+import { ADDRESSES, type MarketInfo } from "@/lib/config";
 import { useUserPositionV2, useTokenAllowance, useInvalidateAllOnTxSuccess } from "@/lib/hooks";
-import { formatToken, numToRaw, formatHealthFactor, rawToDisplayString } from "@/lib/format";
+import { formatToken, formatHealthFactor, parseAmount, rawToDisplayString } from "@/lib/format";
 import { TxStatus } from "./TxStatus";
+
+/// 全额清仓哨兵：`_repayCore` 在链上用「当时」的债务重算，传 uint256.max 可一次清零，
+/// 不会因为 UI 读到的债务略旧而残留尾巴（残留会锁住换档）。
+const MAX_REPAY = 2n ** 256n - 1n;
 
 export function RepayTab({ market }: { market: MarketInfo }) {
   const { address } = useAccount();
   const [amount, setAmount] = useState("");
+  const [useMax, setUseMax] = useState(false);
   const { position } = useUserPositionV2(address as Address);
   const { allowance, refetch: refetchAllowance } = useTokenAllowance(
     market.address as Address,
@@ -23,13 +28,16 @@ export function RepayTab({ market }: { market: MarketInfo }) {
   useInvalidateAllOnTxSuccess(isSuccess);
 
   const debtRaw = position ? position.marketDebt[market.id] ?? 0n : 0n;
-  const amountNum = parseFloat(amount);
-  const parsedRaw = numToRaw(amountNum, market.decimals);
-  // 精确/浮点超过真实债务时钳制到债务本身，避免“Max 后还不了”
-  const raw = parsedRaw > debtRaw ? debtRaw : parsedRaw;
-  const needApproval = raw > 0n && allowance < raw;
-  const valid = raw > 0n && raw <= debtRaw;
-  const remaining = debtRaw > raw ? debtRaw - raw : 0n;
+  const parsed = parseAmount(amount, market.decimals);
+  // 输入超过真实债务时钳制到债务本身
+  const raw = parsed === null ? 0n : parsed > debtRaw ? debtRaw : parsed;
+  // 授权带 0.1% + 1 token 缓冲：合约按「当时」利息重算债务，UI 读数可能已略低于链上债务，
+  // 精确到 wei 的授权会让还款 revert。
+  const approveRaw = debtRaw + debtRaw / 100n + 10n ** BigInt(market.decimals);
+  const payRaw = useMax ? MAX_REPAY : raw;
+  const needApproval = payRaw > 0n && allowance < (useMax ? approveRaw : raw);
+  const valid = useMax || raw > 0n;
+  const remaining = useMax ? 0n : debtRaw > raw ? debtRaw - raw : 0n;
   const tinyDec = debtRaw < 10n ** BigInt(Math.max(0, market.decimals - 4)) ? 8 : 2;
 
   return (
@@ -42,11 +50,17 @@ export function RepayTab({ market }: { market: MarketInfo }) {
             className="input"
             placeholder="0.00"
             value={amount}
-            onChange={(e) => setAmount(e.target.value)}
+            onChange={(e) => {
+              setUseMax(false);
+              setAmount(e.target.value);
+            }}
           />
           <button
             className="btn-outline whitespace-nowrap"
-            onClick={() => setAmount(rawToDisplayString(debtRaw, market.decimals))}
+            onClick={() => {
+              setUseMax(true);
+              setAmount(rawToDisplayString(debtRaw, market.decimals));
+            }}
           >
             Max
           </button>
@@ -54,6 +68,12 @@ export function RepayTab({ market }: { market: MarketInfo }) {
         <p className="mt-1 text-xs text-slate-500">
           Current debt: {formatToken(debtRaw, market.decimals, tinyDec)} {market.symbol}
         </p>
+        {useMax && (
+          <p className="mt-1 text-xs text-slate-500">
+            Repaying the full balance on-chain (the contract clears the whole debt including
+            interest accrued up to the block that mines it).
+          </p>
+        )}
       </div>
       <div className="flex justify-between text-sm">
         <span className="text-slate-500">Remaining debt after</span>
@@ -76,8 +96,8 @@ export function RepayTab({ market }: { market: MarketInfo }) {
               address: market.address as Address,
               abi: MockTokenAbi,
               functionName: "approve",
-              args: [ADDRESSES.lendingPool as Address, MAX_UINT],
-gas: TX_GAS,
+              // 精确授权（含利息增长缓冲），不用 MAX_UINT
+              args: [ADDRESSES.lendingPool as Address, approveRaw],
             })
           }
         >
@@ -92,8 +112,7 @@ gas: TX_GAS,
               address: ADDRESSES.lendingPool as Address,
               abi: LendingPoolAbi,
               functionName: "repay",
-              args: [BigInt(market.id), raw],
-gas: TX_GAS,
+              args: [BigInt(market.id), payRaw],
             })
           }
         >

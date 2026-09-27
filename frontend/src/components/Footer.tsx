@@ -31,7 +31,7 @@ export function Footer() {
               </a>
             </li>
             <li>
-              <a className="hover:text-accent" href={`${ETHERSCAN_URL}/address/${ADDRESSES.switchableOracle}`} target="_blank" rel="noreferrer">
+              <a className="hover:text-accent" href={`${ETHERSCAN_URL}/address/${ADDRESSES.priceOracle}`} target="_blank" rel="noreferrer">
                 Oracle
               </a>
             </li>

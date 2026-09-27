@@ -3,17 +3,18 @@
 import { usePoolStats } from "@/lib/hooks";
 import { ADDRESSES, ETHERSCAN_URL } from "@/lib/config";
 
+// 仅列出当前部署实际存在的合约：未部署的地址在 deployments/*.json 里是空串，直接过滤掉，
+// 避免渲染出「0x…」空白行（原列表里的 SwitchableOracle 与主网无关，已移除）。
 const CONTRACTS = [
   { name: "LendingPool", addr: ADDRESSES.lendingPool },
-  { name: "MockUSDC", addr: ADDRESSES.usdc },
-  { name: "SwitchableOracle", addr: ADDRESSES.switchableOracle },
-  { name: "ChainlinkOracle", addr: ADDRESSES.chainlinkOracle },
+  { name: "USDC", addr: ADDRESSES.usdc },
+  { name: "ChainlinkOracle (price source)", addr: ADDRESSES.chainlinkOracle },
   { name: "InterestRateModel", addr: ADDRESSES.interestRateModel },
   { name: "RiskManager", addr: ADDRESSES.riskManager },
   { name: "LiquidationManager", addr: ADDRESSES.liquidationManager },
   { name: "ReserveManager", addr: ADDRESSES.reserveManager },
   { name: "RiskEngine", addr: ADDRESSES.riskEngine },
-];
+].filter((c) => /^0x[0-9a-fA-F]{40}$/.test(c.addr));
 
 export default function AboutPage() {
   const { stats } = usePoolStats();

@@ -4,9 +4,9 @@ import { useState } from "react";
 import { type Address } from "viem";
 import { useAccount, useWriteContract } from "wagmi";
 import { LendingPoolAbi, MockTokenAbi } from "@/lib/abis";
-import { ADDRESSES, MIN_SUPPLY, MAX_UINT, TX_GAS, type MarketInfo } from "@/lib/config";
+import { ADDRESSES, MIN_SUPPLY, type MarketInfo } from "@/lib/config";
 import { useMarketStats, useUserSharesOf, useTokenBalance, useTokenAllowance, useInvalidateAllOnTxSuccess } from "@/lib/hooks";
-import { formatToken, numToRaw } from "@/lib/format";
+import { formatToken, numToRaw, parseAmount } from "@/lib/format";
 import { SupplyApyDisplay } from "@/components/ApyDisplay";
 import { TxStatus } from "./TxStatus";
 
@@ -22,8 +22,8 @@ export function SupplyTab({ market }: { market: MarketInfo }) {
     ADDRESSES.lendingPool as Address,
   );
 
-  const amountNum = parseFloat(amount);
-  const raw = numToRaw(amountNum, market.decimals);
+  // 以字符串解析（parseUnits），避免浮点在 18 位精度下的误差
+  const raw = parseAmount(amount, market.decimals) ?? 0n;
   const needApproval = raw > 0n && allowance < raw;
 
   const { data: hash, isPending, isSuccess, writeContract } = useWriteContract();
@@ -31,8 +31,8 @@ export function SupplyTab({ market }: { market: MarketInfo }) {
 
   const supplyAprPct = stats ? (Number(stats.supplyApr) / 1e18) * 100 : undefined;
   const utilPct = stats ? (Number(stats.utilization) / 1e18) * 100 : 0;
-  const supply7d = supplyAprPct !== undefined ? supplyAprPct * (0.96 + (supplyAprPct % 0.08) / 100) : undefined;
-  const valid = amountNum >= MIN_SUPPLY && raw > 0n && raw <= balance;
+  const minRaw = numToRaw(MIN_SUPPLY, market.decimals);
+  const valid = raw >= minRaw && raw <= balance;
   const shareValue = stats && stats.supplyIndex > 0n ? (shares * stats.supplyIndex) / BigInt(1e18) : 0n;
 
   const utilAfter =
@@ -68,13 +68,6 @@ export function SupplyTab({ market }: { market: MarketInfo }) {
         <SupplyApyDisplay currentPct={supplyAprPct ?? 0} utilPct={utilPct} />
       </div>
       <div className="flex justify-between text-sm">
-        <span className="text-slate-500">Supply APY · 7D Avg (est.)</span>
-        <span className="text-slate-800">{supply7d !== undefined ? `~${supply7d.toFixed(2)}%` : "--"}</span>
-      </div>
-      <p className="-mt-2 text-[11px] text-slate-400">
-        7D average is estimated from the current rate model — not historical data.
-      </p>
-      <div className="flex justify-between text-sm">
         <span className="text-slate-500">Utilization (now → after)</span>
         <span className="text-slate-800">
           {utilPct.toFixed(2)}% → {utilAfter.toFixed(2)}%
@@ -89,8 +82,8 @@ export function SupplyTab({ market }: { market: MarketInfo }) {
               address: market.address as Address,
               abi: MockTokenAbi,
               functionName: "approve",
-              args: [ADDRESSES.lendingPool as Address, MAX_UINT],
-gas: TX_GAS,
+              // 精确授权：只授权本次金额，避免无限授权扩大攻击面
+              args: [ADDRESSES.lendingPool as Address, raw],
             })
           }
         >
@@ -106,7 +99,6 @@ gas: TX_GAS,
               abi: LendingPoolAbi,
               functionName: "supply",
               args: [BigInt(market.id), raw],
-gas: TX_GAS,
             })
           }
         >
