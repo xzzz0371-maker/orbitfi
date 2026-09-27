@@ -1,8 +1,23 @@
 # ZZZ Lend — 项目进度总览（PROGRESS）
 
+> ⚠️ **正文是 2026-09-03 的快照**，保留作历史轨迹用。**当前状态请看**
+> [`上链差距清单_2026-09-15.md`](上链差距清单_2026-09-15.md)（还差什么）
+> 与 [`主网部署执行手册_2026-09-19.md`](主网部署执行手册_2026-09-19.md)（怎么执行）。
+>
+> **09-03 之后的进展**
+>
+> | 日期 | 事件 |
+> |---|---|
+> | 09-04 | 主网就绪部署模板、Safe 2/3 脚本、Base fork dress rehearsal（8/8）、Oracle 配置表、多签收口手册、冷启动方案 |
+> | 09-15 | 全量代码审查：**2 High**（H1 前端读价源指向未部署合约且静默回落硬编码价；H2 `maxStaleness=3600` 与 feed heartbeat 86400 矛盾 → 平稳行情下借款/取抵押/清算大面积 revert）、7 Medium、14 Low。前端与部署脚本修复当日落地 |
+> | 09-19 | 部署脚本在本地 Base fork **完整广播执行通过** + 23 项链上核验；确认 README 的"两步部署"流程跑不通（`DeployMainnet` 已自带收口） |
+> | 09-27 | 积压 23 天的改动入库（3 个 commit）；新增一键上线编排器 `scripts/go-live.mjs`，dry-run 端到端 31/31 通过 |
+>
+> **仍拦在上链前**：多签地址未就绪、真实广播需部署者私钥与 Base ETH、**外部审计未做**、monitor 真名单与 keeper 未配。
+
 > 更新：2026-09-03 ｜ 仓库：https://github.com/xzzz0371-maker/zzz-lend （main）
 > 定位：风险分层 DeFi 借贷（测试网 Sepolia V2 多资产）；**尚处主网准备期，未上主网**。
-> 关联：`docs/ZZZ_Lend_完整文档.md`、`docs/安全审计报告_V2多资产_2026-09-02.md`、`docs/主网准备_本轮改动说明与遗留问题_2026-09-03.md`、`docs/任务记录.md`（本机）。
+> 关联：`docs/ZZZ_Lend_完整文档.md`、`docs/安全审计报告_V2多资产_2026-09-02.md`、`docs/archive/主网准备_本轮改动说明与遗留问题_2026-09-03.md`、`docs/archive/任务记录.md`（本机）。
 
 ---
 
@@ -149,7 +164,7 @@
 ---
 
 ## 5. 风险与不确定（摘要）
-详见 `docs/主网准备_本轮改动说明与遗留问题_2026-09-03.md`，要点：无外部审计；Oracle 中断锁“有债用户”降险；事件缺失靠轮询（脚手架已建 + 真网冒烟通过，Subgraph/告警渠道正式化待做）；坏账 front-run 无延迟；wstETH 真实兑换率/合成 feed 未验证；Sepolia 演示掩盖 feed 可用性（monitor 冒烟已实测 wstETH/WBTC 主源 stale → CRITICAL 正确）；Smart Account（第三方钱包模块）兼容与报错提示待打磨；历次归档旧池资产需注意；**cap/Timelock 为合约代码变更，Sepolia 当前池尚未包含（待整组重部署）；cap 上限值、Timelock minDelay 均为主网配置决策**。
+详见 `docs/archive/主网准备_本轮改动说明与遗留问题_2026-09-03.md`，要点：无外部审计；Oracle 中断锁“有债用户”降险；事件缺失靠轮询（脚手架已建 + 真网冒烟通过，Subgraph/告警渠道正式化待做）；坏账 front-run 无延迟；wstETH 真实兑换率/合成 feed 未验证；Sepolia 演示掩盖 feed 可用性（monitor 冒烟已实测 wstETH/WBTC 主源 stale → CRITICAL 正确）；Smart Account（第三方钱包模块）兼容与报错提示待打磨；历次归档旧池资产需注意；**cap/Timelock 为合约代码变更，Sepolia 当前池尚未包含（待整组重部署）；cap 上限值、Timelock minDelay 均为主网配置决策**。
 
 ---
 

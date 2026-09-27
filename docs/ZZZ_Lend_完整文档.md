@@ -40,7 +40,7 @@
 | 6 Oracle + 风险引擎 | ChainlinkOracle / SwitchableOracle / RiskEngine / 坏账即时传导 / minSeize | ✅ |
 | 7 Sepolia 部署 | 脚本 + 本地广播验证完成；**链上广播待凭据** | 🔶 |\n| 7.1 安全改进 | ETH转账call / USDC脱锚计价 / 偏差不revert / RiskEngineAuto / 事件补全 / 清算时间差 / 覆盖率 | ✅ 已完成 |
 | 7.2 参数与边界 | maxDeviation 默认 30%；异常价禁止新增借款/抵押 | ✅ 已完成 |
-| 8 前端 | **Next.js 14 Dashboard 已实现**（Home/Dashboard/Stress Test/History/About，全英文，连接 Sepolia），见 `frontend/README.md` 与 `docs/前端_验证报告_v1.0.md` | ✅ 已完成 |
+| 8 前端 | **Next.js 14 Dashboard 已实现**（Home/Dashboard/Stress Test/History/About，全英文，连接 Sepolia），见 `frontend/README.md` 与 `docs/archive/前端_验证报告_v1.0.md` | ✅ 已完成 |
 | 3/5/9/10 | Sepolia E2E 真跑、回测、审计、主网 | ⏳ |
 | **9 多资产 V2** | 单池多市场（USDC/USDT/DAI 借贷 × ETH/wstETH/WBTC 抵押）、按资产五档 LTV/LT、跨市场同 tier 借款、任意抵押×市场清算、每市场独立利率/储备/坏账、前端多市场卡+选择器；部署 Sepolia（2026-09-02） | ✅ 已完成（详见第 9 章） |
 
@@ -346,7 +346,7 @@ forge fmt --check: 通过
 
 清算时机与独立计算的 HF<1 完全一致；所有场景资金守恒；坏账场景由储备部分兜底 + 存款人按份额承担。
 
-## 4.3 部署与 E2E 本地验证 — v1.0 · 2026-08-31（Sepolia 真网 E2E 见 `docs/E2E_Sepolia_测试报告.md`）
+## 4.3 部署与 E2E 本地验证 — v1.0 · 2026-08-31（Sepolia 真网 E2E 见 `docs/archive/E2E_Sepolia_测试报告.md`）
 
 - 部署脚本 `script/Deploy.s.sol` 在 Anvil 真实广播成功（合约、角色、接线、JSON 正确）。
 - E2E `script/e2e_sepolia.sh` 在 Anvil 全 8 步 status=0x1：
@@ -538,7 +538,7 @@ cast send $SWITCH "setPrice(address,uint256)" $ETH 300000000000 --private-key $D
 ## 8.1 待办
 
 1. **Sepolia 真部署**（待凭据：RPC/测试币/私钥/Etherscan Key），回填本文档 6.7 地址表。
-2. ✅ 前端 Dashboard（Next.js 已实现：Home/Dashboard/Stress Test/History/About，全英文，见 `frontend/README.md` 与 `docs/前端_验证报告_v1.0.md`）。
+2. ✅ 前端 Dashboard（Next.js 已实现：Home/Dashboard/Stress Test/History/About，全英文，见 `frontend/README.md` 与 `docs/archive/前端_验证报告_v1.0.md`）。
 3. 数据服务（`services/`）+ Subgraph。
 4. 生产权限收口（多签/撤销部署者）、外部安全审计。
 5. Git 首次提交（当前 `git init` 未提交、未配 user.name/email）。

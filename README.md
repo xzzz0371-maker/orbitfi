@@ -56,9 +56,17 @@ forge test --match-contract ForkMainnet -vvv --fork-url https://mainnet.base.org
 
 ## Mainnet Deployment (Base · chainId 8453)
 
-1. Create a Safe multisig (official addresses in `docs/主网多签与权限收口手册.md`)
-2. `forge script script/DeployMainnet.s.sol:DeployMainnet --rpc-url ... --broadcast`
-3. On-chain verification (see `docs/上链差距清单_2026-09-15.md` §3.1 for the exact `cast` checks)
+Everything is wrapped in one orchestrator. Fill `contracts/.env.mainnet` — only three values are
+needed (`PRIVATE_KEY` / `MAINNET_ADMIN` / `MAINNET_TREASURY`); the rest is pre-configured.
+
+```bash
+node scripts/go-live.mjs check        # pre-flight, read-only: creds, tooling, caps priced in USD
+node scripts/go-live.mjs dry-run      # full rehearsal on a local Base fork (deploy + 31 assertions)
+node scripts/go-live.mjs broadcast    # real deploy + verify
+node scripts/go-live.mjs post         # sync addresses into the frontend + build
+```
+
+Full runbook, including the manual step-by-step path: `docs/主网部署执行手册_2026-09-19.md`.
 
 > ⚠️ **`DeployMainnet.s.sol` performs the full handover itself** — it grants `PARAM_ADMIN` /
 > `PAUSER` / `DEFAULT_ADMIN` to the multisig (or Timelock), transfers `Ownable` ownership of
@@ -67,19 +75,29 @@ forge test --match-contract ForkMainnet -vvv --fork-url https://mainnet.base.org
 > would revert with `AccessControlUnauthorizedAccount` (the handover has *already succeeded*).
 > That script is only for deployments that did **not** hand over (e.g. the testnet `Deploy.s.sol`).
 
-> Always dry-run on a fork before deploying. Note that a dry run still executes
-> `_writeJson`, so point it at a scratch path:
-> `MAINNET_DEPLOYMENTS_OUT=./deployments/dryrun_fork.json`.
+> `check` refuses to proceed when `MAINNET_ADMIN` equals the deployer EOA: the handover would
+> renounce every role with nobody left holding them, and that is irreversible.
 
 ## Docs
 
+**Full index: [`docs/README.md`](docs/README.md)** — what to read for what, and what is historical.
+
+Start here:
+
+- `docs/接手指南.md` — developer handoff / quick start
 - `docs/ZZZ_Lend_完整文档.md` — full protocol spec
+- `docs/主网部署执行手册_2026-09-19.md` — mainnet deployment runbook (commands verified on a Base fork)
+- `docs/上链差距清单_2026-09-15.md` — what is done, what is deliberately untouched, what remains
+- `docs/主网上线决策建议_2026-09-15.md` — go/no-go gates and soft-launch caps
+- `docs/代码审查报告_2026-09-15.md` — full code review (2 High / 7 Medium / 14 Low)
+- `docs/修改方案_2026-09-15.md` — remediation plan (batches A–D)
 - `docs/安全审计报告_V2多资产_2026-09-02.md` — internal security audit (V2 multi-asset)
-- `docs/E2E_Sepolia_测试报告.md` — Sepolia E2E test report
-- `docs/Fork主网dress rehearsal报告.md` — Base mainnet fork rehearsal (8/8 passed)
+- `docs/Fork主网dress rehearsal报告.md` — Base fork rehearsal (8/8 passed; source of the H2 evidence)
 - `docs/主网Oracle配置表.md` — Base official Chainlink feed config
 - `docs/主网多签与权限收口手册.md` — Safe multisig + Timelock permission handover guide
 - `docs/冷启动与运营方案.md` — cold-start liquidity / caps / growth / monitoring plan
+
+Historical documents (superseded, kept for traceability) live in `docs/archive/`.
 
 ## License
 
