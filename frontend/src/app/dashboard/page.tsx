@@ -3,18 +3,15 @@
 import { useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { type Address } from "viem";
-import { useAccount, useWriteContract } from "wagmi";
-import { MockTokenAbi } from "@/lib/abis";
-import { ADDRESSES, BORROW_MARKETS, COLLATERALS } from "@/lib/config";
-import { useUserPositionV2, useAssetPrices, useInvalidateAllOnTxSuccess } from "@/lib/hooks";
-import { numToRaw } from "@/lib/format";
+import { useAccount } from "wagmi";
+import { BORROW_MARKETS, COLLATERALS } from "@/lib/config";
+import { useUserPositionV2, useAssetPrices } from "@/lib/hooks";
 import { PositionPanel } from "@/components/dashboard/PositionPanel";
 import { SupplyTab } from "@/components/dashboard/SupplyTab";
 import { WithdrawTab } from "@/components/dashboard/WithdrawTab";
 import { BorrowTab } from "@/components/dashboard/BorrowTab";
 import { RepayTab } from "@/components/dashboard/RepayTab";
 import { CollateralTab } from "@/components/dashboard/CollateralTab";
-import { TxStatus } from "@/components/dashboard/TxStatus";
 
 const TABS = ["Supply", "Withdraw", "Borrow", "Repay", "Collateral"] as const;
 
@@ -36,8 +33,6 @@ function DashboardInner() {
   const { position } = useUserPositionV2(address as Address);
   const allTokens = [...COLLATERALS.map((c) => c.address), ...BORROW_MARKETS.map((m) => m.address)];
   const { prices, ready: pricesReady } = useAssetPrices(allTokens);
-  const { data: faucetHash, isPending: faucetPending, isSuccess: faucetSuccess, writeContract: faucet } = useWriteContract();
-  useInvalidateAllOnTxSuccess(faucetSuccess);
 
   if (!isConnected) {
     return (
@@ -50,8 +45,6 @@ function DashboardInner() {
     );
   }
 
-  const faucetRaw = numToRaw(10_000, market.decimals);
-
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -61,22 +54,7 @@ function DashboardInner() {
             Choose a borrow market, then supply / borrow / repay. Manage collateral below.
           </p>
         </div>
-        <button
-          className="btn-outline text-xs"
-          disabled={faucetPending}
-          onClick={() =>
-            faucet({
-              address: market.address as Address,
-              abi: MockTokenAbi,
-              functionName: "faucet",
-              args: [faucetRaw],
-            })
-          }
-        >
-          {faucetPending ? "Minting…" : `Get Test ${market.symbol} (10,000)`}
-        </button>
       </div>
-      <TxStatus hash={faucetHash} />
 
       {!pricesReady && (
         <div className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700 ring-1 ring-red-200">

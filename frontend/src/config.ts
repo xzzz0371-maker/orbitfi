@@ -1,4 +1,4 @@
-import { createConfig, http } from "wagmi";
+import { createConfig, http, fallback } from "wagmi";
 import { type CreateConnectorFn } from "wagmi";
 import { injected, walletConnect } from "wagmi/connectors";
 import { base } from "./lib/chain";
@@ -15,7 +15,18 @@ export const wagmiConfig = createConfig({
   chains: [base],
   connectors,
   transports: {
-    [base.id]: http(RPC_URL),
+    // Multiple endpoints behind a fallback: a single public RPC intermittently returns
+    // "RPC Request failed." under the burst of reads a dashboard mount produces, which
+    // surfaces as the whole price panel going unavailable. `batch` also coalesces the
+    // calls viem would otherwise issue one by one.
+    [base.id]: fallback(
+      [
+        http(RPC_URL, { batch: true, retryCount: 2, retryDelay: 150 }),
+        http("https://base-rpc.publicnode.com", { batch: true, retryCount: 2, retryDelay: 150 }),
+        http("https://base.drpc.org", { batch: true, retryCount: 2, retryDelay: 150 }),
+      ],
+      { rank: false },
+    ),
   },
 });
 
