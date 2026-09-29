@@ -15,7 +15,7 @@
  * Add --yes to skip interactive confirmation (broadcast only).
  */
 
-import { spawn, spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { createInterface } from "node:readline/promises";
@@ -95,28 +95,46 @@ function loadEnv() {
 
 // ---------- process helpers ----------
 
+// NOTE: every external command goes through async spawn(), never spawnSync().
+// In sandboxed Windows environments spawnSync() fails with EBUSY before the child even
+// starts (it reports an empty stdout with status null), which makes a command that works
+// fine in a terminal look like it silently failed. Async spawn works in both.
+
 function run(cmd, args, { cwd = CONTRACTS, env = {}, quiet = false } = {}) {
-  const r = spawnSync(cmd, args, {
-    cwd,
-    shell: process.platform === "win32",
-    env: { ...process.env, ...env },
-    encoding: "utf8",
-    stdio: quiet ? "pipe" : "inherit",
+  return new Promise((resolve) => {
+    const child = spawn(cmd, args, {
+      cwd,
+      shell: process.platform === "win32",
+      env: { ...process.env, ...env },
+      stdio: quiet ? ["ignore", "pipe", "pipe"] : "inherit",
+    });
+    let out = "";
+    if (quiet) {
+      child.stdout?.on("data", (d) => { out += d.toString(); });
+      child.stderr?.on("data", (d) => { out += d.toString(); });
+    }
+    child.on("error", (e) => resolve({ code: 1, out: `${out}\n[spawn error] ${e.message}`.trim() }));
+    child.on("close", (code) => resolve({ code: code ?? 1, out: out.trim() }));
   });
-  return { code: r.status ?? 1, out: (r.stdout ?? "") + (r.stderr ?? "") };
 }
 
-function capture(cmd, args) {
-  const r = spawnSync(cmd, args, {
-    cwd: CONTRACTS,
-    shell: process.platform === "win32",
-    encoding: "utf8",
+function capture(cmd, args, { cwd = CONTRACTS } = {}) {
+  return new Promise((resolve) => {
+    const child = spawn(cmd, args, {
+      cwd,
+      shell: process.platform === "win32",
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let out = "";
+    child.stdout?.on("data", (d) => { out += d.toString(); });
+    child.stderr?.on("data", (d) => { out += d.toString(); });
+    child.on("error", (e) => resolve({ code: 1, out: `${out}\n[spawn error] ${e.message}`.trim() }));
+    child.on("close", (code) => resolve({ code: code ?? 1, out: out.trim() }));
   });
-  return { code: r.status ?? 1, out: `${r.stdout ?? ""}${r.stderr ?? ""}`.trim() };
 }
 
-function have(bin) {
-  return capture(bin, ["--version"]).code === 0;
+async function have(bin) {
+  return (await capture(bin, ["--version"])).code === 0;
 }
 
 /** Exact raw -> decimal conversion. `Number(raw) / 10**dec` is wrong: the raw value
@@ -131,8 +149,8 @@ function fromRaw(raw, dec) {
 
 /** USD price from a Chainlink feed (8 decimals). Uses latestRoundData rather than the
  *  deprecated latestAnswer, which some Base feeds no longer expose. */
-function readPrice(feed, rpc) {
-  const r = capture("cast", [
+async function readPrice(feed, rpc) {
+  const r = await capture("cast", [
     "call", feed, "latestRoundData()(uint80,int256,uint256,uint256,uint80)", "--rpc-url", rpc,
   ]);
   if (r.code !== 0) return null;
@@ -149,7 +167,7 @@ function fmtUsd(n) {
   return `$${n.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
 }
 
-function checkEnvShape(env, forReal) {
+async function checkEnvShape(env, forReal) {
   step("1. Environment");
 
   const missing = [];
@@ -185,7 +203,7 @@ function checkEnvShape(env, forReal) {
 
   // The single most dangerous mis-fill: admin == deployer EOA makes the handover revoke
   // every role from the only holder -> protocol permanently unmanageable.
-  const dep = capture("cast", ["wallet", "address", "--private-key", env.PRIVATE_KEY]);
+  const dep = await capture("cast", ["wallet", "address", "--private-key", env.PRIVATE_KEY]);
   const deployer = dep.code === 0 ? dep.out.split(/\s+/).pop() : null;
   if (deployer) {
     ok(`deployer        = ${deployer}`);
@@ -235,10 +253,10 @@ function checkEnvShape(env, forReal) {
   return { deployer, admin, treasury, pauser, staleness, deviation: dev };
 }
 
-function checkTooling() {
+async function checkTooling() {
   step("2. Tooling");
   for (const bin of ["forge", "cast", "anvil"]) {
-    if (have(bin)) ok(`${bin} available`);
+    if (await have(bin)) ok(`${bin} available`);
     else bad(`${bin} not found in PATH`);
   }
   const envLocal = path.join(CONTRACTS, ".env");
@@ -248,7 +266,7 @@ function checkTooling() {
   }
 }
 
-function checkCaps(env) {
+async function checkCaps(env) {
   step("3. Risk caps priced in USD (live Chainlink reads)");
   info("caps are token amounts, not USD; this shows what they are worth right now");
   let totalSupplyCap = 0;
@@ -264,7 +282,7 @@ function checkCaps(env) {
       warn(`${a.sym.padEnd(6)} ${a.capKey} unset/0 -> ${C.red}UNLIMITED${C.reset} (the cap mechanism is built but not wired)`);
       continue;
     }
-    const price = readPrice(a.feed, env.MAINNET_RPC_URL);
+    const price = await readPrice(a.feed, env.MAINNET_RPC_URL);
     const amount = fromRaw(BigInt(rawCap), a.dec);
     const usd = price === null ? NaN : amount * price;
     const priceTag = price === null ? "?" : fmtUsd(price);
@@ -318,12 +336,14 @@ function forgeVerify(env, { fork }) {
   });
 }
 
-async function waitForFork(timeoutMs = 60000) {
-  const deadline = Date.now() + timeoutMs;
+async function waitForFork(timeoutMs = 180000, onTick) {
+  const start = Date.now();
+  const deadline = start + timeoutMs;
   while (Date.now() < deadline) {
-    const r = capture("cast", ["block-number", "--rpc-url", FORK_RPC]);
+    const r = await capture("cast", ["block-number", "--rpc-url", FORK_RPC]);
     if (r.code === 0 && /^\d+/.test(r.out)) return Number(r.out.match(/^\d+/)[0]);
-    await new Promise((r) => setTimeout(r, 2000));
+    if (onTick) onTick(Math.round((Date.now() - start) / 1000));
+    await new Promise((r) => setTimeout(r, 3000));
   }
   return null;
 }
@@ -332,7 +352,8 @@ function killFork(child) {
   if (!child || child.killed) return;
   try {
     if (process.platform === "win32") {
-      spawnSync("taskkill", ["/PID", String(child.pid), "/T", "/F"], { stdio: "ignore" });
+      // spawnSync is unusable here (EBUSY) - fire and forget.
+      spawn("taskkill", ["/PID", String(child.pid), "/T", "/F"], { stdio: "ignore" }).unref();
     } else {
       process.kill(-child.pid, "SIGKILL");
     }
@@ -350,9 +371,9 @@ async function confirm(question) {
 // ---------- commands ----------
 
 async function cmdCheck(env) {
-  checkEnvShape(env, false);
-  checkTooling();
-  checkCaps(env);
+  await checkEnvShape(env, false);
+  await checkTooling();
+  await checkCaps(env);
   step("Summary");
   if (failures) {
     console.log(`  ${C.red}${failures} problem(s) found - fix before deploying.${C.reset}`);
@@ -362,36 +383,75 @@ async function cmdCheck(env) {
 }
 
 async function cmdDryRun(env) {
-  checkEnvShape(env, false);
+  // A rehearsal does not need real credentials - anvil accounts are substituted for the
+  // deployer / admin / treasury anyway. Only the governance parameters need to be real,
+  // so that the run validates the config actually filled into .env.mainnet.
+  const missing = [];
+  if (!env.PRIVATE_KEY) missing.push("PRIVATE_KEY");
+  if (!env.MAINNET_ADMIN || env.MAINNET_ADMIN.toLowerCase() === ZERO_ADDR) missing.push("MAINNET_ADMIN");
+
+  if (missing.length) {
+    console.log(`\n${C.yellow}${C.bold}Credentials not set (${missing.join(", ")}) - this rehearsal uses anvil accounts${C.reset}`);
+    console.log("  Governance parameters (caps / timelock delay / staleness / deviation / whitelist)");
+    console.log("  are still taken from your .env.mainnet, so the config you filled in is what gets tested.");
+    console.log(`  ${C.dim}All three must be filled in before a real broadcast.${C.reset}\n`);
+  }
+
+  const checkEnv = missing.length
+    ? { ...env, PRIVATE_KEY: ANVIL.key, MAINNET_ADMIN: ANVIL.admin, MAINNET_TREASURY: ANVIL.treasury }
+    : env;
+
+  await checkEnvShape(checkEnv, false);
   if (failures) process.exit(1);
 
   step("Starting local Base fork (anvil)");
   info("the real deployer has no Base ETH on a fork, so anvil accounts are used for the dry run");
   info("your governance parameters (caps, timelock delay, staleness, deviation) are used as-is");
+  info("first start can take a while on a public RPC (mainnet.base.org is slow and rate-limited)");
 
-  const child = spawn("anvil", ["--fork-url", env.MAINNET_RPC_URL, "--port", String(FORK_PORT), "--silent"], {
+  // Capture anvil's output through pipes. Do NOT hand a file descriptor to a shell-wrapped
+  // child on Windows: the process then silently fails to bind the port and the log file
+  // stays empty, which is a miserable thing to debug.
+  const child = spawn("anvil", ["--fork-url", env.MAINNET_RPC_URL, "--port", String(FORK_PORT)], {
     cwd: CONTRACTS,
     shell: process.platform === "win32",
     detached: process.platform !== "win32",
-    stdio: "ignore",
+    stdio: ["ignore", "pipe", "pipe"],
   });
+  let anvilOut = "";
+  child.stdout?.on("data", (d) => { anvilOut += d.toString(); });
+  child.stderr?.on("data", (d) => { anvilOut += d.toString(); });
+  child.on("error", (e) => { anvilOut += `\n[spawn error] ${e.message}`; });
 
   try {
-    const block = await waitForFork();
+    let lastLog = 0;
+    const block = await waitForFork(180000, (s) => {
+      if (s - lastLog >= 15) {
+        lastLog = s;
+        info(`still initialising the fork... ${s}s elapsed`);
+      }
+    });
     if (block === null) {
-      bad("anvil fork did not come up within 60s");
-      console.log(`  ${C.dim}public RPCs (mainnet.base.org) are slow and rate-limited - try a paid RPC URL${C.reset}`);
+      bad("anvil fork did not come up within 180s");
+      const tail = anvilOut.trim().split(/\r?\n/).filter(Boolean).slice(-8);
+      if (tail.length) {
+        console.log(`  ${C.dim}--- anvil output ---${C.reset}`);
+        for (const l of tail) console.log(`  ${C.dim}${l}${C.reset}`);
+      } else {
+        console.log(`  ${C.dim}(anvil produced no output at all - check that port ${FORK_PORT} is free)${C.reset}`);
+      }
+      console.log(`  ${C.dim}public RPCs are slow and rate-limited - set MAINNET_RPC_URL to a paid endpoint${C.reset}`);
       process.exit(1);
     }
     ok(`fork ready at block ${block}`);
 
     step("Deploying on the fork (--broadcast, local only)");
-    const d = forgeDeploy(env, { fork: true, realBroadcast: false });
+    const d = await forgeDeploy(env, { fork: true, realBroadcast: false });
     if (d.code !== 0) { bad("deployment failed - see the log above"); process.exit(1); }
     ok("deployment succeeded");
 
     step("Verifying on-chain state (VerifyMainnetState)");
-    const v = forgeVerify(env, { fork: true });
+    const v = await forgeVerify(env, { fork: true });
     if (v.code !== 0) { bad("state verification failed - see the log above"); process.exit(1); }
     ok("all assertions passed");
 
@@ -400,19 +460,18 @@ async function cmdDryRun(env) {
     console.log(`  Next: ${C.bold}node scripts/go-live.mjs broadcast${C.reset}  (needs Base ETH in the deployer wallet)`);
   } finally {
     killFork(child);
-    for (const f of ["dryrun_fork.json"]) {
-      const p = path.join(CONTRACTS, "deployments", f);
-      if (fs.existsSync(p)) fs.rmSync(p, { force: true });
-    }
+    const scratch = path.join(CONTRACTS, "deployments", "dryrun_fork.json");
+    // On Windows the file may still be locked right after taskkill - harmless.
+    try { if (fs.existsSync(scratch)) fs.rmSync(scratch, { force: true }); } catch { /* locked */ }
   }
 }
 
 async function cmdBroadcast(env) {
-  const cfg = checkEnvShape(env, true);
+  const cfg = await checkEnvShape(env, true);
   if (!cfg || failures) process.exit(1);
 
   step("Pre-broadcast balance");
-  const bal = capture("cast", ["balance", cfg.deployer, "--rpc-url", env.MAINNET_RPC_URL]);
+  const bal = await capture("cast", ["balance", cfg.deployer, "--rpc-url", env.MAINNET_RPC_URL]);
   if (bal.code === 0) {
     const eth = Number(BigInt(bal.out.split(/\s+/)[0])) / 1e18;
     const line = `deployer balance = ${eth.toFixed(6)} ETH`;
@@ -434,12 +493,12 @@ async function cmdBroadcast(env) {
   }
 
   step("Deploying to Base mainnet");
-  const d = forgeDeploy(env, { fork: false, realBroadcast: true });
+  const d = await forgeDeploy(env, { fork: false, realBroadcast: true });
   if (d.code !== 0) { bad("deployment failed - see the log above"); process.exit(1); }
   ok("deployment succeeded");
 
   step("Verifying on-chain state");
-  const v = forgeVerify(env, { fork: false });
+  const v = await forgeVerify(env, { fork: false });
   if (v.code !== 0) { bad("state verification failed - DO NOT proceed before resolving this"); process.exit(1); }
   ok("all assertions passed");
 
@@ -451,7 +510,7 @@ async function cmdBroadcast(env) {
 async function cmdPost(env) {
   step("Syncing deployment addresses into the frontend");
   const src = env.MAINNET_DEPLOYMENTS_OUT || REAL_OUT;
-  const sync = run("node", ["scripts/sync-deployments.mjs", "--from", `contracts/${src.replace(/^\.\//, "")}`], {
+  const sync = await run("node", ["scripts/sync-deployments.mjs", "--from", `contracts/${src.replace(/^\.\//, "")}`], {
     cwd: ROOT,
     quiet: false,
   });
@@ -459,7 +518,7 @@ async function cmdPost(env) {
   ok("frontend/src/lib/deployments/base.json updated");
 
   step("Building the frontend");
-  const build = run("npm", ["run", "build"], { cwd: path.join(ROOT, "frontend") });
+  const build = await run("npm", ["run", "build"], { cwd: path.join(ROOT, "frontend") });
   if (build.code !== 0) { bad("frontend build failed"); process.exit(1); }
   ok("build succeeded");
 
