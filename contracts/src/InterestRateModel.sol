@@ -100,7 +100,7 @@ contract InterestRateModel is Ownable, IInterestRateModel {
     /// @notice 正常市场（三段式），对标 Aave v3 Base 的 90.5% 最优利用率：
     ///         0..90.5% 斜率 3%；90.5..95% 斜率 40%；>95% 斜率 150%。
     ///         目标（tier1）：80%→4.40%、90.5%→4.72%、95%→6.52%、100%→14.02%。
-    ///         取向：前 90% 保持便宜以对标 Aave（@90% T1 = 4.70% vs Aave ~4.6%），
+    ///         取向：前 90% 保持便宜以对标 Aave（90% 处 T1 = 4.70%，Aave 约 4.6%），
     ///         最后 10% 陡增以保住提现安全。
     function _applyNormal() internal {
         baseRatePerSecond = _aprToPerSecond(0.02e18);
