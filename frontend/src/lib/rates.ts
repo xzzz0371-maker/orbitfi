@@ -1,11 +1,11 @@
 // NORMAL preset interest-rate model (estimated; matches contracts InterestRateModel NORMAL, three-segment).
-const BASE = 0.5;
-const SLOPE1 = 4; // 0..KINK1
-const KINK1 = 80;
-const SLOPE2A = 25; // KINK1..KINK2
-const KINK2 = 85;
-const SLOPE2 = 50; // > KINK2
-const PREMIUM: Record<number, number> = { 1: 0, 2: 1, 3: 2, 4: 3, 5: 4.5 };
+const BASE = 2.0;
+const SLOPE1 = 3; // 0..KINK1
+export const KINK1 = 90.5; // 对标 Aave v3 Base 的 90.5% 最优利用率
+const SLOPE2A = 40; // KINK1..KINK2
+export const KINK2 = 95;
+const SLOPE2 = 150; // > KINK2
+const PREMIUM: Record<number, number> = { 1: 0, 2: 0.5, 3: 1, 4: 1.5, 5: 2.5 };
 
 export function borrowAprAt(utilPct: number, tier: number): number {
   let r = BASE;

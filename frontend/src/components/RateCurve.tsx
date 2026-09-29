@@ -1,37 +1,18 @@
 "use client";
 
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceLine } from "recharts";
+import { borrowAprAt, KINK1, KINK2 } from "@/lib/rates";
 
-// Interest-rate curve for the NORMAL preset (three-segment: base 0.5%, slope1 4% 0-80%,
-// slope2a 25% 80-85%, slope2 50% >85%). Estimated — matches the deployed InterestRateModel.
-const TIER_PREMIUM: Record<number, number> = { 1: 0, 2: 1, 3: 2, 4: 3, 5: 4.5 };
-
-function aprAt(util: number, tier: number): number {
-  const base = 0.5;
-  const slope1 = 4;
-  const kink1 = 80;
-  const slope2a = 25;
-  const kink2 = 85;
-  const slope2 = 50;
-  let r = base;
-  if (util <= kink1) r += (slope1 * util) / 100;
-  else if (util <= kink2)
-    r += (slope1 * kink1) / 100 + (slope2a * (util - kink1)) / 100;
-  else
-    r +=
-      (slope1 * kink1) / 100 +
-      (slope2a * (kink2 - kink1)) / 100 +
-      (slope2 * (util - kink2)) / 100;
-  return r + TIER_PREMIUM[tier];
-}
-
+// The curve is drawn from lib/rates.ts so the chart can never drift away from the contract
+// parameters. (It used to keep its own copy of the numbers, which is precisely how a chart
+// ends up showing a curve the protocol no longer uses.)
 export function RateCurve({ height = 260 }: { height?: number }) {
   const data = Array.from({ length: 21 }, (_, i) => {
     const util = i * 5;
     return {
       util,
-      "Tier 1": Number(aprAt(util, 1).toFixed(2)),
-      "Tier 5": Number(aprAt(util, 5).toFixed(2)),
+      "Tier 1": Number(borrowAprAt(util, 1).toFixed(2)),
+      "Tier 5": Number(borrowAprAt(util, 5).toFixed(2)),
     };
   });
 
@@ -66,8 +47,8 @@ export function RateCurve({ height = 260 }: { height?: number }) {
             }}
           />
           <Legend wrapperStyle={{ fontSize: 12 }} />
-          <ReferenceLine x={80} stroke="#f59e0b" strokeDasharray="4 4" label={{ value: "kink1 80%", fill: "#f59e0b", fontSize: 10 }} />
-          <ReferenceLine x={85} stroke="#f97316" strokeDasharray="4 4" label={{ value: "kink2 85%", fill: "#f97316", fontSize: 10 }} />
+          <ReferenceLine x={KINK1} stroke="#f59e0b" strokeDasharray="4 4" label={{ value: `kink1 ${KINK1}%`, fill: "#f59e0b", fontSize: 10 }} />
+          <ReferenceLine x={KINK2} stroke="#f97316" strokeDasharray="4 4" label={{ value: `kink2 ${KINK2}%`, fill: "#f97316", fontSize: 10 }} />
           <Line type="monotone" dataKey="Tier 1" stroke="#3b82f6" strokeWidth={2} dot={false} />
           <Line type="monotone" dataKey="Tier 5" stroke="#f97316" strokeWidth={2} dot={false} />
         </LineChart>

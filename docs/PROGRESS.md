@@ -12,6 +12,7 @@
 > | 09-15 | 全量代码审查：**2 High**（H1 前端读价源指向未部署合约且静默回落硬编码价；H2 `maxStaleness=3600` 与 feed heartbeat 86400 矛盾 → 平稳行情下借款/取抵押/清算大面积 revert）、7 Medium、14 Low。前端与部署脚本修复当日落地 |
 > | 09-19 | 部署脚本在本地 Base fork **完整广播执行通过** + 23 项链上核验；确认 README 的"两步部署"流程跑不通（`DeployMainnet` 已自带收口） |
 > | 09-27 | 积压 23 天的改动入库（3 个 commit）；新增一键上线编排器 `scripts/go-live.mjs`，dry-run 端到端 31/31 通过 |
+> | 09-29 | 项目更名 **OrbitFi**；利率参数对标 Aave v3 Base 重调（**kink1 80%→90.5%、base 0.5%→2%、档位溢价下调**）；Safe 多签 2-of-3 创建并激活；新增 `docs/利率模型说明.md`、`docs/上线操作清单.md` |
 >
 > **仍拦在上链前**：多签地址未就绪、真实广播需部署者私钥与 Base ETH、**外部审计未做**、monitor 真名单与 keeper 未配。
 
@@ -38,7 +39,7 @@
 ### 2.1 V2 多资产架构（合约）
 - 单池多市场：USDC/USDT/DAI 借贷市场 × ETH/wstETH/WBTC 抵押；每市场独立现金/供应指数/利用率/利率/储备/Treasury/坏账
 - 精度全参数化（wadScale；6/8/18 位）；跨抵押品加权 LTV/LT 健康度；跨市场同 tier 借款；任意市场×任意抵押品清算；全局 tier（首借锁定）
-- RiskManager 按抵押资产×档位（ETH/wstETH 同表，WBTC 保守表）；ReserveManager 按 token；InterestRateModel NORMAL 三段曲线（kink1 80%/kink2 85%/slope2a 25%）
+- RiskManager 按抵押资产×档位（ETH/wstETH 同表，WBTC 保守表）；ReserveManager 按 token；InterestRateModel NORMAL 三段曲线（**2026-09-29 调整为 kink1 90.5% / kink2 95% / slope2a 40% / base 2% / slope1 3% / slope2 150%，对标 Aave v3 Base**）
 - 为过 EIP-170 做了压缩：移除用户事件、合并 `marketAccounts` 视图、精简 V1 包装（存量测试改为 market0 显式入参）
 
 ### 2.2 代码修复（审计与实测发现，均已进测试/主网前代码）

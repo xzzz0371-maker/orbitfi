@@ -97,20 +97,23 @@ contract InterestRateModel is Ownable, IInterestRateModel {
         emit PresetApplied(preset);
     }
 
-    /// @notice 正常市场（三段式）：0..80% 斜率 4%；80..85% 斜率 25%；>85% 斜率 50%。
-    ///         目标：80%→3.7%、85%→4.95%、90%→7.45%、100%→12.45%（tier1）。
+    /// @notice 正常市场（三段式），对标 Aave v3 Base 的 90.5% 最优利用率：
+    ///         0..90.5% 斜率 3%；90.5..95% 斜率 40%；>95% 斜率 150%。
+    ///         目标（tier1）：80%→4.40%、90.5%→4.72%、95%→6.52%、100%→14.02%。
+    ///         取向：前 90% 保持便宜以对标 Aave（@90% T1 = 4.70% vs Aave ~4.6%），
+    ///         最后 10% 陡增以保住提现安全。
     function _applyNormal() internal {
-        baseRatePerSecond = _aprToPerSecond(0.005e18);
-        slope1PerSecond = _aprToPerSecond(0.04e18);
-        slope2aPerSecond = _aprToPerSecond(0.25e18);
-        slope2PerSecond = _aprToPerSecond(0.5e18);
-        kinkUtilization = 8e17;
-        kink2Utilization = 85e16;
+        baseRatePerSecond = _aprToPerSecond(0.02e18);
+        slope1PerSecond = _aprToPerSecond(0.03e18);
+        slope2aPerSecond = _aprToPerSecond(0.4e18);
+        slope2PerSecond = _aprToPerSecond(1.5e18);
+        kinkUtilization = 905e15;
+        kink2Utilization = 95e16;
         tierPremiumPerSecond[1] = _aprToPerSecond(0);
-        tierPremiumPerSecond[2] = _aprToPerSecond(0.01e18);
-        tierPremiumPerSecond[3] = _aprToPerSecond(0.02e18);
-        tierPremiumPerSecond[4] = _aprToPerSecond(0.03e18);
-        tierPremiumPerSecond[5] = _aprToPerSecond(0.045e18);
+        tierPremiumPerSecond[2] = _aprToPerSecond(0.005e18);
+        tierPremiumPerSecond[3] = _aprToPerSecond(0.01e18);
+        tierPremiumPerSecond[4] = _aprToPerSecond(0.015e18);
+        tierPremiumPerSecond[5] = _aprToPerSecond(0.025e18);
     }
 
     /// @notice 高波动市场：保持两段（kink2 = kink1，中段宽度为 0），曲线与历史一致。
