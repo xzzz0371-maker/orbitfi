@@ -1,7 +1,8 @@
 {
   "comment": "盯梢对象配置（Base 主网）。'users' 为需要轮询判断清算/低HF的账户（上线后填实际关注地址）；pool 地址以 deployments/base.json 为准（部署后填写）。如部署了 Subgraph 可改从索引读用户集。",
   "chainId": 8453,
-  "pool": "",
+  "_poolNote": "仅供人阅读——代码不读这个字段，池地址统一由 deployments/base.json 的 lendingPool 提供（见 src/index.ts）。",
+  "pool": "0xFeB11Be6e2F26ac19dBB4526Cbd1D540E07653e1",
   "markets": [
     { "id": 0, "symbol": "USDC", "token": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", "decimals": 6 },
     { "id": 1, "symbol": "USDT", "token": "0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2", "decimals": 6 },
