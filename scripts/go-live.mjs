@@ -112,7 +112,9 @@ function spawnExe(cmd, args, opts) {
   return spawn(cmd, args, opts);
 }
 
-function run(cmd, args, { cwd = CONTRACTS, env = {}, quiet = false } = {}) {
+/** Run a command, streaming output. Time-bounded too (default 30 min) - forge script has to
+ *  compile first, and a stalled RPC during broadcast should surface as an error, not a hang. */
+function run(cmd, args, { cwd = CONTRACTS, env = {}, quiet = false, timeoutMs = 1800000 } = {}) {
   return new Promise((resolve) => {
     const child = spawnExe(cmd, args, {
       cwd,
@@ -120,26 +122,56 @@ function run(cmd, args, { cwd = CONTRACTS, env = {}, quiet = false } = {}) {
       stdio: quiet ? ["ignore", "pipe", "pipe"] : "inherit",
     });
     let out = "";
+    let settled = false;
+    let timer = null;
+    const done = (r) => {
+      if (settled) return;
+      settled = true;
+      if (timer) clearTimeout(timer);
+      resolve(r);
+    };
+    timer = setTimeout(() => {
+      try { child.kill(); } catch { /* already gone */ }
+      done({ code: 1, out: `${out}\n[timeout after ${timeoutMs / 60000} min]`.trim() });
+    }, timeoutMs);
     if (quiet) {
       child.stdout?.on("data", (d) => { out += d.toString(); });
       child.stderr?.on("data", (d) => { out += d.toString(); });
     }
-    child.on("error", (e) => resolve({ code: 1, out: `${out}\n[spawn error] ${e.message}`.trim() }));
-    child.on("close", (code) => resolve({ code: code ?? 1, out: out.trim() }));
+    child.on("error", (e) => done({ code: 1, out: `${out}\n[spawn error] ${e.message}`.trim() }));
+    child.on("close", (code) => done({ code: code ?? 1, out: out.trim() }));
   });
 }
 
-function capture(cmd, args, { cwd = CONTRACTS } = {}) {
+/** Capture a command's output. Always time-bounded: a hung RPC request (public endpoints
+ *  rate-limit aggressively) would otherwise leave this promise pending forever and hang
+ *  the whole script with no message. */
+function capture(cmd, args, { cwd = CONTRACTS, timeoutMs = 60000 } = {}) {
   return new Promise((resolve) => {
     const child = spawnExe(cmd, args, {
       cwd,
       stdio: ["ignore", "pipe", "pipe"],
     });
     let out = "";
+    let settled = false;
+    let timer = null;
+    const done = (r) => {
+      if (settled) return;
+      settled = true;
+      if (timer) clearTimeout(timer);
+      resolve(r);
+    };
+    timer = setTimeout(() => {
+      try { child.kill(); } catch { /* already gone */ }
+      done({
+        code: 1,
+        out: `${out}\n[timeout after ${timeoutMs / 1000}s - the RPC may be rate-limiting]`.trim(),
+      });
+    }, timeoutMs);
     child.stdout?.on("data", (d) => { out += d.toString(); });
     child.stderr?.on("data", (d) => { out += d.toString(); });
-    child.on("error", (e) => resolve({ code: 1, out: `${out}\n[spawn error] ${e.message}`.trim() }));
-    child.on("close", (code) => resolve({ code: code ?? 1, out: out.trim() }));
+    child.on("error", (e) => done({ code: 1, out: `${out}\n[spawn error] ${e.message}`.trim() }));
+    child.on("close", (code) => done({ code: code ?? 1, out: out.trim() }));
   });
 }
 
@@ -510,14 +542,27 @@ async function cmdBroadcast(env) {
   if (!cfg || failures) process.exit(1);
 
   step("Pre-broadcast balance");
+  // Estimate from the deployment's actual gas usage (the rehearsal measured ~20.6M gas for
+  // the whole deploy) times the live gas price, with 2x headroom.
+  // A fixed ETH threshold is simply wrong on an L2: at 0.006 gwei the entire deployment
+  // costs ~0.00012 ETH, so a "0.05 ETH minimum" rejects a wallet with 400x the needed funds.
+  const DEPLOY_GAS = 22000000n;
   const bal = await capture("cast", ["balance", cfg.deployer, "--rpc-url", env.MAINNET_RPC_URL]);
-  if (bal.code === 0) {
-    const eth = Number(BigInt(bal.out.split(/\s+/)[0])) / 1e18;
-    const line = `deployer balance = ${eth.toFixed(6)} ETH`;
-    if (eth < 0.05) bad(`${line} - likely too low (~0.05-0.2 ETH needed)`);
+  const gp = await capture("cast", ["gas-price", "--rpc-url", env.MAINNET_RPC_URL]);
+  if (bal.code === 0 && gp.code === 0) {
+    const wei = BigInt(bal.out.split(/\s+/)[0]);
+    const gasPrice = BigInt(gp.out.split(/\s+/)[0]);
+    const est = DEPLOY_GAS * gasPrice;
+    const need = est * 2n;
+    const eth = (x) => (Number(x) / 1e18).toFixed(8);
+    const gwei = (Number(gasPrice) / 1e9).toFixed(6);
+    const line =
+      `deployer balance ${eth(wei)} ETH | gas price ${gwei} gwei | ` +
+      `est. cost ${eth(est)} ETH | need ${eth(need)} (2x headroom)`;
+    if (wei < need) bad(`${line} -> INSUFFICIENT, top the deployer up`);
     else ok(line);
   } else {
-    warn("could not read the deployer balance");
+    warn("could not read balance / gas price - skipping the balance pre-check");
   }
   if (failures) process.exit(1);
 
