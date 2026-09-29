@@ -4,9 +4,10 @@ import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useReadContract, useReadContracts } from "wagmi";
 import { type Address } from "viem";
-import { LendingPoolAbi, PriceOracleAbi } from "./abis";
+import { LendingPoolAbi, PriceOracleAbi, InterestRateModelAbi } from "./abis";
 import { ADDRESSES, ETH_ADDRESS, PRICE_ORACLE, PRICE_ORACLE_READY } from "./config";
 import { TIERS } from "./config";
+import { PRESET_NORMAL } from "./rates";
 
 const pool = { address: ADDRESSES.lendingPool as Address, abi: LendingPoolAbi } as const;
 
@@ -202,6 +203,46 @@ export function useUsdcAllowance(owner: Address | undefined, spender: Address | 
     query: { enabled: !!owner && !!spender, refetchInterval: 6_000, refetchIntervalInBackground: true },
   });
   return { allowance: (data as bigint | undefined) ?? 0n, refetch };
+}
+
+// ==================== Rate-model inputs (must come from the chain, not from constants) ====================
+
+const isAddr = (a: string | undefined): a is string => /^0x[0-9a-fA-F]{40}$/.test(a ?? "");
+
+/// 利率模型当前生效的预设。
+/// lib/rates.ts 只建模了 NORMAL 那一套曲线，而治理可以用 applyPreset() 随时切到
+/// HIGH_VOLATILITY / EXTREME。切了以后前端再按 NORMAL 画曲线、报 APY 就是在给用户
+/// 一个链上根本不成立的数字。所以页面必须先问链上"现在是哪套"，只有确认 NORMAL 才展示模型值。
+/// preset === undefined 表示还没读到（读不到就当作"未确认"，一律不展示模型值）。
+export function useIrmPreset(): { preset: number | undefined; normal: boolean } {
+  const addr = ADDRESSES.interestRateModel as string | undefined;
+  const { data } = useReadContract({
+    address: addr as Address,
+    abi: InterestRateModelAbi,
+    functionName: "activePreset",
+    query: { enabled: isAddr(addr), refetchInterval: 60_000, refetchIntervalInBackground: true, retry: false },
+  });
+  const preset = data === undefined || data === null ? undefined : Number(data as bigint | number);
+  return { preset, normal: preset === PRESET_NORMAL };
+}
+
+/// 存款人分成 = 1 − reserveFactor − treasuryFactor，读链上而不是写死 0.94。
+/// 这两个费率都是 PARAM_ADMIN 可改的；写死意味着治理一改费率，所有展示的存款 APY 就错了，
+/// 而这正是本项目已经踩过一次的"前端常量与合约脱钩"老坑。
+export function useDepositorShare(): number | undefined {
+  const { data } = useReadContracts({
+    contracts: [
+      { ...pool, functionName: "reserveFactor" },
+      { ...pool, functionName: "treasuryFactor" },
+    ],
+    query: { refetchInterval: 60_000, refetchIntervalInBackground: true, retry: false },
+  });
+  const d = data as unknown as Array<{ result?: bigint }> | undefined;
+  const rf = d?.[0]?.result;
+  const tf = d?.[1]?.result;
+  if (rf == null || tf == null) return undefined;
+  const fee = Number(rf + tf) / 1e18;
+  return fee >= 0 && fee < 1 ? 1 - fee : undefined;
 }
 
 // ==================== V2 multi-asset hooks ====================

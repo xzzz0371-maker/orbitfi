@@ -1,21 +1,21 @@
 "use client";
 
-import { usePoolStats, useBorrowAprs, useMarketStats, useMarketBorrowAprs } from "@/lib/hooks";
+import { usePoolStats, useBorrowAprs, useMarketStats, useMarketBorrowAprs, useDepositorShare } from "@/lib/hooks";
 import { RiskCard } from "@/components/RiskCard";
 import { UtilizationRing } from "@/components/UtilizationRing";
 import { RateCurve } from "@/components/RateCurve";
 import { TIERS, BORROW_MARKETS, type MarketInfo } from "@/lib/config";
 import { formatApy, formatToken } from "@/lib/format";
-import { projectedSupplyApyPct } from "@/lib/rates";
+import { DEFAULT_DEPOSITOR_SHARE, projectedSupplyApyPct } from "@/lib/rates";
 
-function MarketCard({ market }: { market: MarketInfo }) {
+function MarketCard({ market, depositorShare }: { market: MarketInfo; depositorShare: number }) {
   const { stats } = useMarketStats(market.id);
   const borrowAprs = useMarketBorrowAprs(market.id);
   const supplyAprPct = stats ? (Number(stats.supplyApr) / 1e18) * 100 : 0;
   const utilPct = stats ? (Number(stats.utilization) / 1e18) * 100 : 0;
   const borrowAprTop = borrowAprs[5];
   const isEmpty = utilPct <= 0.0001;
-  const displayedApy = isEmpty ? projectedSupplyApyPct() : supplyAprPct;
+  const displayedApy = isEmpty ? projectedSupplyApyPct(depositorShare) : supplyAprPct;
 
   return (
     <div className="card card-hover p-5">
@@ -52,7 +52,7 @@ function MarketCard({ market }: { market: MarketInfo }) {
         <span className="font-semibold text-slate-800">{formatApy(displayedApy)}</span>
       </div>
       <div className="text-right text-[10px] text-slate-400">
-        {isEmpty ? "Projected (assumes 80% utilization)" : `Current · projected ~${projectedSupplyApyPct().toFixed(2)}%`}
+        {isEmpty ? "Projected (assumes 80% utilization)" : `Current · projected ~${projectedSupplyApyPct(depositorShare).toFixed(2)}%`}
       </div>
       <div className="mt-1 flex justify-between text-xs text-slate-500">
         <span>Borrow APR · T5</span>
@@ -72,6 +72,8 @@ function MarketCard({ market }: { market: MarketInfo }) {
 export default function HomePage() {
   const { stats, isPending } = usePoolStats();
   const borrowAprs = useBorrowAprs();
+  // 存款人分成读链上；没读到才退回默认值（治理可改 reserveFactor / treasuryFactor）。
+  const depositorShare = useDepositorShare() ?? DEFAULT_DEPOSITOR_SHARE;
 
   const supplyAprPct = stats ? (Number(stats.supplyApr) / 1e18) * 100 : 0;
   const utilPct = stats ? (Number(stats.utilization) / 1e18) * 100 : 0;
@@ -141,7 +143,7 @@ export default function HomePage() {
         <h2 className="mb-4 font-display text-xl font-bold text-slate-800">Markets</h2>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {BORROW_MARKETS.map((m) => (
-            <MarketCard key={m.id} market={m} />
+            <MarketCard key={m.id} market={m} depositorShare={depositorShare} />
           ))}
         </div>
         <p className="mt-3 text-xs text-slate-500">

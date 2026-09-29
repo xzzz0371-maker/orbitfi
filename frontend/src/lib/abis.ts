@@ -5,6 +5,7 @@ import SwitchableOracleAbiRaw from "./abis/SwitchableOracle.json";
 import ChainlinkOracleAbiRaw from "./abis/ChainlinkOracle.json";
 import RiskManagerAbiRaw from "./abis/RiskManager.json";
 import ReserveManagerAbiRaw from "./abis/ReserveManager.json";
+import InterestRateModelAbiRaw from "./abis/InterestRateModel.json";
 
 // 价格源最小 ABI。ChainlinkOracle 与 SwitchableOracle 都实现 getAssetPrice(address)->uint256，
 // 所以同一份 ABI 对两者都可用，避免因部署形态不同而拿错 ABI。
@@ -41,3 +42,5 @@ export const ChainlinkOracleAbi = ChainlinkOracleAbiRaw as any;
 export const RiskManagerAbi = RiskManagerAbiRaw as any;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const ReserveManagerAbi = ReserveManagerAbiRaw as any;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const InterestRateModelAbi = InterestRateModelAbiRaw as any;

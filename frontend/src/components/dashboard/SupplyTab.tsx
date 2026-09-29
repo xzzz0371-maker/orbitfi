@@ -7,7 +7,7 @@ import { LendingPoolAbi, MockTokenAbi } from "@/lib/abis";
 import { ADDRESSES, MIN_SUPPLY, type MarketInfo } from "@/lib/config";
 import { useMarketStats, useUserSharesOf, useTokenBalance, useTokenAllowance, useInvalidateAllOnTxSuccess } from "@/lib/hooks";
 import { formatToken, numToRaw, parseAmount } from "@/lib/format";
-import { SupplyApyDisplay } from "@/components/ApyDisplay";
+import { SupplyRatePreview } from "./SupplyRatePreview";
 import { TxStatus } from "./TxStatus";
 
 export function SupplyTab({ market }: { market: MarketInfo }) {
@@ -63,10 +63,13 @@ export function SupplyTab({ market }: { market: MarketInfo }) {
           {market.symbol}
         </p>
       </div>
-      <div className="flex items-center justify-between gap-3">
-        <span className="text-slate-500">Supply APY</span>
-        <SupplyApyDisplay currentPct={supplyAprPct ?? 0} utilPct={utilPct} />
-      </div>
+      <SupplyRatePreview
+        market={market}
+        stats={stats}
+        currentAprPct={supplyAprPct}
+        utilPct={utilPct}
+        amountRaw={raw}
+      />
       <div className="flex justify-between text-sm">
         <span className="text-slate-500">Utilization (now → after)</span>
         <span className="text-slate-800">
