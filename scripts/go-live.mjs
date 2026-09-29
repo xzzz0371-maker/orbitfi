@@ -177,7 +177,7 @@ function fmtUsd(n) {
   return `$${n.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
 }
 
-async function checkEnvShape(env, forReal) {
+async function checkEnvShape(env, forReal, { verifySafe = false } = {}) {
   step("1. Environment");
 
   const missing = [];
@@ -196,12 +196,42 @@ async function checkEnvShape(env, forReal) {
   ok("PRIVATE_KEY present (value not shown)");
 
   const admin = env.MAINNET_ADMIN;
+  const adminIsAddress = /^0x[0-9a-fA-F]{40}$/.test(admin);
   if (admin.toLowerCase() === ZERO_ADDR) {
     bad("MAINNET_ADMIN is the zero address - deploy would revoke roles to nowhere");
-  } else if (!/^0x[0-9a-fA-F]{40}$/.test(admin)) {
+  } else if (!adminIsAddress) {
     bad("MAINNET_ADMIN is not an address");
   } else {
     ok(`MAINNET_ADMIN   = ${admin}`);
+  }
+
+  // A Safe address shown in the UI is counterfactual (CREATE2): it exists before the
+  // contract is deployed. Granting DEFAULT_ADMIN / PARAM_ADMIN / PAUSER to an address with
+  // no code means the emergency pause and every parameter change become unreachable, and
+  // the Timelock would have no proposer.
+  if (verifySafe && adminIsAddress && admin.toLowerCase() !== ZERO_ADDR) {
+    const c = await capture("cast", ["code", admin, "--rpc-url", env.MAINNET_RPC_URL]);
+    if (c.code !== 0) {
+      warn("could not reach the RPC to check whether MAINNET_ADMIN is a deployed contract");
+    } else if ((c.out.split(/\s+/)[0] ?? "0x").length <= 2) {
+      bad(`${admin} has NO CODE on chain - it is not a deployed contract`);
+      info("If this came from app.safe.global it is still counterfactual - finish the activate");
+      info("step first (fund it, then deploy). Roles granted to it, including the emergency");
+      info("PAUSER, would be unreachable, and the Timelock would have no proposer.");
+    } else {
+      const thr = await capture("cast", ["call", admin, "getThreshold()(uint256)", "--rpc-url", env.MAINNET_RPC_URL]);
+      const owns = await capture("cast", ["call", admin, "getOwners()(address[])", "--rpc-url", env.MAINNET_RPC_URL]);
+      if (thr.code === 0 && owns.code === 0) {
+        const threshold = Number(BigInt(thr.out.split(/\s+/)[0]));
+        const owners = owns.out.match(/0x[0-9a-fA-F]{40}/g) ?? [];
+        ok(`MAINNET_ADMIN is a deployed Safe: ${threshold}-of-${owners.length}`);
+        for (const o of owners) info(`    owner ${o}`);
+        if (threshold < 2) bad(`threshold is ${threshold} - a 1-of-N Safe gives no protection against a single key`);
+        if (owners.length < 2) bad(`only ${owners.length} owner address(es) - the Safe contract requires unique owners`);
+      } else {
+        warn("MAINNET_ADMIN is a contract, but getThreshold()/getOwners() did not respond - is it really a Safe?");
+      }
+    }
   }
 
   const treasury = env.MAINNET_TREASURY && env.MAINNET_TREASURY.toLowerCase() !== ZERO_ADDR
@@ -381,7 +411,7 @@ async function confirm(question) {
 // ---------- commands ----------
 
 async function cmdCheck(env) {
-  await checkEnvShape(env, false);
+  await checkEnvShape(env, false, { verifySafe: true });
   await checkTooling();
   await checkCaps(env);
   step("Summary");
@@ -476,7 +506,7 @@ async function cmdDryRun(env) {
 }
 
 async function cmdBroadcast(env) {
-  const cfg = await checkEnvShape(env, true);
+  const cfg = await checkEnvShape(env, true, { verifySafe: true });
   if (!cfg || failures) process.exit(1);
 
   step("Pre-broadcast balance");
