@@ -9,10 +9,13 @@
 > - 部分历史报告（如 `Fork主网dress rehearsal报告.md`、`代码审查报告_2026-09-15.md` 等）
 > - 文件名 `ZZZ_Lend_完整文档.md`（大量交叉引用指向它，重命名会断链）
 >
-> 另有两处**不能改**：
-> - `frontend/package.json` 的 `--project-name=zzz-lend` —— 这是 Cloudflare Pages 的线上项目名，
->   改了会部署到新项目（域名变化）或直接失败
+> 另有一处**不改**：
 > - Safe 多签在 `app.safe.global` 上的显示名 `zzz-lend` —— 界面可改，但与链上无关
+>
+> **2026-09-29 更新**：Cloudflare Pages 项目名已从 `zzz-lend` 迁移到 **`orbitfi`**
+> —— Cloudflare **不支持重命名项目**，所以做法是新建项目 `orbitfi` 后重新部署，
+> 前端代码本身零改动（没有硬编码域名）。
+> 线上域名：**https://orbitfi.pages.dev**；旧域名 `zzz-lend.pages.dev` 仍可访问。
 
 更新时间：2026-09-27
 

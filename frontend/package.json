@@ -1,5 +1,5 @@
 {
-  "name": "zzz-lend-frontend",
+  "name": "orbitfi-frontend",
   "version": "1.0.0",
   "private": true,
   "scripts": {
@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "serve out",
     "lint": "next lint",
-    "deploy:cf": "wrangler pages deploy out --project-name=zzz-lend"
+    "deploy:cf": "wrangler pages deploy out --project-name=orbitfi"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.51.23",

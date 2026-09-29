@@ -33,7 +33,7 @@ on Cloudflare Pages without a Node.js runtime.
 **Option B — Wrangler CLI:**
 ```bash
 npx wrangler login          # once
-npm run deploy:cf           # = wrangler pages deploy out --project-name=zzz-lend
+npm run deploy:cf           # = wrangler pages deploy out --project-name=orbitfi
 ```
 
 > Note: `pages.dev` may also be blocked in some regions — for reliable access from China, connect

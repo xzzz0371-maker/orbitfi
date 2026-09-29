@@ -2,7 +2,7 @@
 
 Risk-tiered DeFi lending protocol on **Base mainnet** / **Sepolia testnet**.
 
-**Live frontend**: <https://zzz-lend.pages.dev/>
+**Live frontend**: <https://orbitfi.pages.dev/>
 
 ## Overview
 
@@ -37,7 +37,7 @@ contracts/
 │   └── MainnetDeployAndTransfer.s.sol # Multisig/Timelock permission handover (Step 4–11)
 ├── test/                        # forge test: 32 suites / 230 passed
 └── deployments/                 # Deployment artifacts (gitignored)
-frontend/       # Next.js frontend (zzz-lend.pages.dev)
+frontend/       # Next.js frontend (orbitfi.pages.dev)
 services/monitor/ # Polling monitor (liquidatable / low HF / utilization / feed alerts, Telegram/webhook)
 scripts/feed-health-check/ # Base feed health check (TS+viem)
 docs/           # Full docs / audit reports / mainnet prep guides
