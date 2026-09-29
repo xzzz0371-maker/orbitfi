@@ -15,15 +15,17 @@ export const wagmiConfig = createConfig({
   chains: [base],
   connectors,
   transports: {
-    // Multiple endpoints behind a fallback: a single public RPC intermittently returns
-    // "RPC Request failed." under the burst of reads a dashboard mount produces, which
-    // surfaces as the whole price panel going unavailable. `batch` also coalesces the
-    // calls viem would otherwise issue one by one.
+    // Ordered by measured reliability, not by brand. Under the burst of concurrent reads a
+    // page mount produces, mainnet.base.org (Base's own public endpoint) rejected 38 of 48
+    // requests while publicnode and drpc rejected none. Because a single rejected price read
+    // trips the fail-closed banner, the flaky endpoint is kept only as a last resort - it is
+    // still used if both healthy endpoints go down, but no request waits on it by default.
+    // `batch` also coalesces the calls viem would otherwise issue one by one.
     [base.id]: fallback(
       [
         http(RPC_URL, { batch: true, retryCount: 2, retryDelay: 150 }),
-        http("https://base-rpc.publicnode.com", { batch: true, retryCount: 2, retryDelay: 150 }),
         http("https://base.drpc.org", { batch: true, retryCount: 2, retryDelay: 150 }),
+        http("https://mainnet.base.org", { batch: true, retryCount: 2, retryDelay: 150 }),
       ],
       { rank: false },
     ),

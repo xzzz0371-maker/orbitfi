@@ -150,9 +150,11 @@ function CollateralRow({
 export function CollateralTab({
   prices,
   pricesReady,
+  pricesLoading = false,
 }: {
   prices: Record<string, number>;
   pricesReady: boolean;
+  pricesLoading?: boolean;
 }) {
   const { address } = useAccount();
   const { position } = useUserPositionV2(address as Address);
@@ -163,7 +165,12 @@ export function CollateralTab({
         Deposit ETH or cbBTC as collateral. Collateral is shared across all borrow markets
         (USDC / USDT / DAI). LTV &amp; liquidation thresholds are calibrated per asset.
       </div>
-      {!pricesReady && (
+      {!pricesReady && pricesLoading && (
+        <div className="rounded-lg bg-slate-100 px-3 py-2 text-xs text-slate-600 ring-1 ring-slate-200">
+          Reading live prices…
+        </div>
+      )}
+      {!pricesReady && !pricesLoading && (
         <div className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700 ring-1 ring-red-200">
           Price feed unavailable — USD values are hidden instead of shown as $0.
         </div>

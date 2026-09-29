@@ -13,8 +13,11 @@ export const base = defineChain({
   name: "Base",
   nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
   rpcUrls: {
+    // Kept in sync with RPC_URL's default. Nothing in the app reads through this (the wagmi
+    // transport in src/config.ts always takes precedence), but leaving mainnet.base.org here
+    // would advertise the one endpoint measured to reject most burst reads.
     default: {
-      http: ["https://mainnet.base.org"],
+      http: ["https://base-rpc.publicnode.com"],
     },
   },
   blockExplorers: {

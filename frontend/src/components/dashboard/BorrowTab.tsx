@@ -18,7 +18,7 @@ export function BorrowTab({ market, initialTier }: { market: MarketInfo; initial
   const { stats } = useMarketStats(market.id);
   const borrowAprs = useMarketBorrowAprs(market.id);
   const collTokens = COLLATERALS.map((c) => c.address);
-  const { prices, ready: pricesReady } = useAssetPrices([...collTokens, market.address]);
+  const { prices, ready: pricesReady, loading: pricesLoading } = useAssetPrices([...collTokens, market.address]);
 
   const { data: hash, isPending, isSuccess, writeContract } = useWriteContract();
   useInvalidateAllOnTxSuccess(isSuccess);
@@ -70,7 +70,8 @@ export function BorrowTab({ market, initialTier }: { market: MarketInfo; initial
   const utilHighPct = Math.min(100, utilPct + 10);
   const rangeLow = borrowAprAt(utilLowPct, tier);
   const rangeHigh = borrowAprAt(utilHighPct, tier);
-  const pricesUnavailable = !pricesReady;
+  // 只有确定读不到价才算 unavailable；首次读取途中显示"读取中"，不误报为不可用。
+  const pricesUnavailable = !pricesReady && !pricesLoading;
 
   return (
     <div className="space-y-4">
@@ -191,19 +192,22 @@ export function BorrowTab({ market, initialTier }: { market: MarketInfo; initial
 
       {address && !valid && !isPending && (
         <p className="text-xs text-danger">
-          {pricesUnavailable
-            ? "Price unavailable (oracle paused / feed stale / address not configured) — borrowing is disabled rather than guessing a price."
-            : tierLocked
-              ? `You are already borrowing at tier ${Number(position?.tier)} — repay in full to switch tiers.`
-              : collValueUsd <= 0
-                ? "No collateral — deposit ETH/cbBTC in the Collateral tab first."
-                : raw < minBorrowRaw
-                  ? `Enter an amount of at least ${MIN_BORROW} ${market.symbol}.`
-                  : raw > maxRaw
-                    ? `Amount exceeds max borrowable (${formatToken(maxRaw, market.decimals)} ${market.symbol}).`
-                    : maxRaw > 0n && maxRaw < minBorrowRaw
-                      ? `Max borrowable (${formatToken(maxRaw, market.decimals)} ${market.symbol}) is below the ${MIN_BORROW} ${market.symbol} minimum — add collateral or choose a higher LTV tier.`
-                      : "Check your inputs."}
+          {pricesLoading
+            ? // 价格还没回来时 collValueUsd 是 0，若不先拦在这里会被误报成"没有抵押品"。
+              "Reading live prices from the on-chain oracle…"
+            : pricesUnavailable
+              ? "Price unavailable (oracle paused / feed stale / address not configured / RPC request failed) — borrowing is disabled rather than guessing a price."
+              : tierLocked
+                ? `You are already borrowing at tier ${Number(position?.tier)} — repay in full to switch tiers.`
+                : collValueUsd <= 0
+                  ? "No collateral — deposit ETH/cbBTC in the Collateral tab first."
+                  : raw < minBorrowRaw
+                    ? `Enter an amount of at least ${MIN_BORROW} ${market.symbol}.`
+                    : raw > maxRaw
+                      ? `Amount exceeds max borrowable (${formatToken(maxRaw, market.decimals)} ${market.symbol}).`
+                      : maxRaw > 0n && maxRaw < minBorrowRaw
+                        ? `Max borrowable (${formatToken(maxRaw, market.decimals)} ${market.symbol}) is below the ${MIN_BORROW} ${market.symbol} minimum — add collateral or choose a higher LTV tier.`
+                        : "Check your inputs."}
         </p>
       )}
 

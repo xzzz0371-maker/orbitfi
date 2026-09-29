@@ -132,20 +132,25 @@ export interface Prices {
   /// undefined = 价格不可用（地址未配置 / feed 陈旧 / oracle 暂停）。此时禁止参与任何计算。
   ethUsd: number | undefined;
   usdcUsd: number | undefined;
+  /// 已确定读不到价：地址没配、oracle 暂停、feed 陈旧、或请求真的失败了。
   unavailable: boolean;
+  /// 首次读取仍在途中：还没有结果，但也还没有失败。
+  /// 必须与 unavailable 区分开——否则每次打开页面都会先闪一条红色的"价格不可用"，
+  /// 把"请求还没回来"当成"读不到"来报警。
+  loading: boolean;
 }
 
 // 从唯一价格源（主网 = ChainlinkOracle）读价。读不到就返回 undefined，绝不回落硬编码价。
 export function usePrices(): Prices {
   const enabled = PRICE_ORACLE_READY;
-  const { data: ethRaw } = useReadContract({
+  const { data: ethRaw, isPending: ethPending } = useReadContract({
     address: PRICE_ORACLE as Address,
     abi: PriceOracleAbi,
     functionName: "getAssetPrice",
     args: [ETH_ADDRESS as Address],
     query: { enabled, refetchInterval: 30_000, refetchIntervalInBackground: true, retry: false },
   });
-  const { data: usdcRaw } = useReadContract({
+  const { data: usdcRaw, isPending: usdcPending } = useReadContract({
     address: PRICE_ORACLE as Address,
     abi: PriceOracleAbi,
     functionName: "getAssetPrice",
@@ -154,7 +159,11 @@ export function usePrices(): Prices {
   });
   const ethUsd = ethRaw != null && ethRaw > 0n ? Number(ethRaw) / 1e8 : undefined;
   const usdcUsd = usdcRaw != null && usdcRaw > 0n ? Number(usdcRaw) / 1e8 : undefined;
-  return { ethUsd, usdcUsd, unavailable: ethUsd === undefined || usdcUsd === undefined };
+  const missing = ethUsd === undefined || usdcUsd === undefined;
+  // enabled=false 时 wagmi 的 isPending 会一直为 true，那不是"加载中"而是"没配地址"，
+  // 所以必须用 enabled 兜住，否则地址缺失会被永久当成加载中、错误提示永远不出现。
+  const loading = enabled && missing && (ethPending || usdcPending);
+  return { ethUsd, usdcUsd, loading, unavailable: missing && !loading };
 }
 
 export function useUsdcBalance(user: Address | undefined) {
@@ -265,8 +274,11 @@ export function useUserSharesOf(user: Address | undefined, marketId: number) {
 
 // Reads USD price (8-decimals → float) for a list of asset addresses.
 // ready=false 表示不能对外展示这些价（地址未配置，或任一资产取不到有效价）→ 调用方必须 fail-closed。
-export function useAssetPrices(addresses: string[]): { prices: Record<string, number>; ready: boolean } {
-  const { data } = useReadContracts({
+// loading=true 表示首次读取还在途中，调用方应显示中性占位而不是报错。
+export function useAssetPrices(
+  addresses: string[],
+): { prices: Record<string, number>; ready: boolean; loading: boolean } {
+  const { data, isPending } = useReadContracts({
     contracts: addresses.map((a) => ({
       address: PRICE_ORACLE as Address,
       abi: PriceOracleAbi,
@@ -284,7 +296,8 @@ export function useAssetPrices(addresses: string[]): { prices: Record<string, nu
     });
   }
   const ready = PRICE_ORACLE_READY && addresses.length > 0 && addresses.every((a) => out[a] !== undefined);
-  return { prices: out, ready };
+  const loading = !ready && PRICE_ORACLE_READY && addresses.length > 0 && isPending;
+  return { prices: out, ready, loading };
 }
 
 export interface PositionV2 {

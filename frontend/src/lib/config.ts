@@ -40,8 +40,13 @@ export const ADDRESSES = {
   riskEngine: deployments.riskEngine,
 };
 
+// Default RPC. NOT mainnet.base.org: measured under the burst of concurrent reads a page
+// mount produces, Base's own public endpoint rejected 38 of 48 requests, while the two
+// alternates rejected none. One rejected price read is enough to trip the fail-closed
+// banner, so the flaky endpoint is not allowed to be the default. Override with
+// NEXT_PUBLIC_RPC_URL (e.g. a private Alchemy/QuickNode key) and that wins instead.
 export const RPC_URL =
-  process.env.NEXT_PUBLIC_RPC_URL ?? "https://mainnet.base.org";
+  process.env.NEXT_PUBLIC_RPC_URL ?? "https://base-rpc.publicnode.com";
 
 export const ETHERSCAN_URL = "https://basescan.org";
 

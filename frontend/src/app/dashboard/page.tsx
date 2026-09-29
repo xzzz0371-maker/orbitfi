@@ -32,7 +32,7 @@ function DashboardInner() {
   const market = BORROW_MARKETS.find((m) => m.id === marketId) ?? BORROW_MARKETS[0];
   const { position } = useUserPositionV2(address as Address);
   const allTokens = [...COLLATERALS.map((c) => c.address), ...BORROW_MARKETS.map((m) => m.address)];
-  const { prices, ready: pricesReady } = useAssetPrices(allTokens);
+  const { prices, ready: pricesReady, loading: pricesLoading } = useAssetPrices(allTokens);
 
   if (!isConnected) {
     return (
@@ -56,12 +56,18 @@ function DashboardInner() {
         </div>
       </div>
 
-      {!pricesReady && (
+      {!pricesReady && pricesLoading && (
+        <div className="rounded-xl bg-slate-100 px-4 py-3 text-sm text-slate-600 ring-1 ring-slate-200">
+          Reading live prices from the on-chain oracle…
+        </div>
+      )}
+
+      {!pricesReady && !pricesLoading && (
         <div className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700 ring-1 ring-red-200">
           <span className="font-semibold">Price feed unavailable.</span> The on-chain oracle read
-          failed (oracle paused, feed stale, or the contract address is not configured). Collateral
-          values, LTV and Health Factor cannot be shown, and price-dependent actions are disabled.
-          Do not act on the numbers below.
+          failed (oracle paused, feed stale, the contract address is not configured, or the RPC
+          request failed). Collateral values, LTV and Health Factor cannot be shown, and
+          price-dependent actions are disabled. Do not act on the numbers below.
         </div>
       )}
 
@@ -106,7 +112,9 @@ function DashboardInner() {
             {tab === 1 && <WithdrawTab key={market.id} market={market} />}
             {tab === 2 && <BorrowTab key={market.id} market={market} initialTier={initialTier} />}
             {tab === 3 && <RepayTab key={market.id} market={market} />}
-            {tab === 4 && <CollateralTab prices={prices} pricesReady={pricesReady} />}
+            {tab === 4 && (
+              <CollateralTab prices={prices} pricesReady={pricesReady} pricesLoading={pricesLoading} />
+            )}
           </div>
         </div>
       </div>
