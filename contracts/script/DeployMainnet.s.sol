@@ -18,7 +18,7 @@ interface IAggregatorMeta {
     function description() external view returns (string memory);
 }
 
-/// @title ZZZ Lend 主网就绪部署模板（多签 / 真实 feed / 默认禁 settable / token 白名单）
+/// @title OrbitFi 主网就绪部署模板（多签 / 真实 feed / 默认禁 settable / token 白名单）
 /// @dev
 ///   设计目标：给“上主网”用的参数化模板。与测试网 Deploy.s.sol 的区别：
 ///     1. 真实 Chainlink feed（无 Mock / 无可设价）：只部署 ChainlinkOracle 直接作为池的价格源，
@@ -431,7 +431,7 @@ contract DeployMainnet is Script {
         RiskEngine re,
         LendingPool pool
     ) internal view {
-        console2.log("=== ZZZ Lend MAINNET (template) ===");
+        console2.log("=== OrbitFi MAINNET (template) ===");
         console2.log("Deployer:", deployer);
         console2.log("Admin(multisig):", admin);
         console2.log("Treasury:", treasury);

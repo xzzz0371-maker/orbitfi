@@ -1,4 +1,4 @@
-// ZZZ Lend monitor — minimal helpers
+// OrbitFi monitor — minimal helpers
 import { existsSync, mkdirSync, writeFileSync, appendFileSync } from "node:fs";
 import path from "node:path";
 

@@ -12,7 +12,7 @@ import {IRiskManager} from "./RiskManager.sol";
 import {ILiquidationManager} from "./LiquidationManager.sol";
 import {IReserveManager} from "./ReserveManager.sol";
 
-/// @title ZZZ Lend LendingPool V2 (multi-asset)
+/// @title OrbitFi LendingPool V2 (multi-asset)
 /// @notice 单合约多市场：可注册多个借贷资产（USDC/USDT/DAI…）与多个抵押资产（ETH/wstETH/WBTC…）。
 ///         每个借贷资产为独立市场（独立现金/供应指数/利率/储备/坏账）；抵押品在池内跨资产记账。
 ///         tier 为全局仓位属性：首笔借款锁定，此后所有市场的借款必须同档（与 V1 一致）。

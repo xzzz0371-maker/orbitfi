@@ -9,7 +9,7 @@ export function Footer() {
             <span className="flex h-6 w-6 items-center justify-center rounded-md bg-gradient-to-br from-accent to-blue-600 text-xs font-bold text-white">
               Z
             </span>
-            <span className="font-display text-sm font-bold text-slate-800">ZZZ Lend</span>
+            <span className="font-display text-sm font-bold text-slate-800">OrbitFi</span>
           </div>
           <p className="mt-3 text-xs leading-relaxed text-slate-500">
             Risk-layered DeFi lending on Base. Transparent mechanics: 94% of borrower interest

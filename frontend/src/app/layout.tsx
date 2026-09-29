@@ -5,7 +5,7 @@ import { NavBar } from "@/components/NavBar";
 import { Footer } from "@/components/Footer";
 
 export const metadata: Metadata = {
-  title: "ZZZ Lend — Risk-Layered DeFi Lending",
+  title: "OrbitFi — Risk-Layered DeFi Lending",
   description:
     "Choose your risk tier, borrow against ETH, and earn on USDC. Estimated yields, no fixed income promises.",
 };

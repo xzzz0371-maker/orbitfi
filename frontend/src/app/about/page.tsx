@@ -26,9 +26,9 @@ export default function AboutPage() {
   return (
     <div className="mx-auto max-w-3xl space-y-8">
       <section>
-        <h1 className="font-display text-3xl font-bold text-slate-900">About ZZZ Lend</h1>
+        <h1 className="font-display text-3xl font-bold text-slate-900">About OrbitFi</h1>
         <p className="mt-3 text-sm leading-relaxed text-slate-600">
-          ZZZ Lend is a risk-layered DeFi lending protocol. Depositors supply USDC and earn dynamic
+          OrbitFi is a risk-layered DeFi lending protocol. Depositors supply USDC and earn dynamic
           estimated yield; borrowers collateralize ETH and choose one of five LTV risk tiers
           (50–80%). The system prices risk in real time: higher tiers mean higher borrowing power,
           higher estimated yields — and higher risk.
@@ -93,11 +93,11 @@ export default function AboutPage() {
       <section className="card p-5">
         <h2 className="mb-3 font-display text-lg font-bold text-slate-800">Risk Disclosure</h2>
         <p className="text-sm leading-relaxed text-slate-600">
-          ZZZ Lend is a decentralized lending protocol. Depositors earn a variable share of borrower
+          OrbitFi is a decentralized lending protocol. Depositors earn a variable share of borrower
           interest; rates are not fixed and may change with market conditions. The protocol
           maintains a Risk Reserve (~3% of borrows) to absorb bad debt; in the event bad debt
           exceeds the reserve, losses are proportionally shared by all depositors. Deposits are not
-          principal-guaranteed. Neither ZZZ Lend nor any party guarantees returns. Always assess
+          principal-guaranteed. Neither OrbitFi nor any party guarantees returns. Always assess
           your own risk tolerance before participating.
         </p>
         <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-slate-600">

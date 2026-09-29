@@ -1,4 +1,4 @@
-// ZZZ Lend — Base (chainId 8453) Chainlink feed registry for health checks.
+// OrbitFi — Base (chainId 8453) Chainlink feed registry for health checks.
 // Addresses are from docs.chain.link/data-feeds/price-feeds/addresses (Base) and
 // verified on-chain 2026-09-03. Confirm against data.chain.link before mainnet.
 import type { Address } from "viem";

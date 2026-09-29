@@ -210,7 +210,7 @@ export default function HomePage() {
       <section className="card border-red-200/70 p-5" style={{ borderColor: "rgba(239,68,68,0.25)" }}>
         <p className="text-sm text-red-700">
           <strong>Risk notice:</strong> Deposits are not guaranteed — your principal may decrease
-          due to bad debt, similar to a fund whose NAV can decline. ZZZ Lend is transparent and
+          due to bad debt, similar to a fund whose NAV can decline. OrbitFi is transparent and
           non-custodial: 94% of borrower interest is passed directly to depositors, and all
           displayed APY/APR figures are projections based on current market conditions, not
           guarantees. Borrowing involves liquidation risk — monitor your Health Factor and keep it

@@ -131,7 +131,7 @@ contract VerifyMainnetState is Script {
         bool allowUnlimitedCaps = vm.envOr("ALLOW_UNLIMITED_CAPS", false);
 
         console2.log("");
-        console2.log("=== ZZZ Lend post-deploy state verification ===");
+        console2.log("=== OrbitFi post-deploy state verification ===");
         _info("record:", cfgPath);
         _info("chainId:", vm.toString(block.chainid));
         _info("pool:", vm.toString(pool));

@@ -1,6 +1,6 @@
-# ZZZ Lend — Frontend Dashboard
+# OrbitFi — Frontend Dashboard
 
-Next.js 14 (App Router) + TypeScript + wagmi/viem + Tailwind CSS dashboard for the ZZZ Lend
+Next.js 14 (App Router) + TypeScript + wagmi/viem + Tailwind CSS dashboard for the OrbitFi
 risk-layered lending protocol, connected to **Sepolia testnet**.
 
 ## Getting started

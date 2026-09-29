@@ -21,7 +21,7 @@ export function NavBar() {
           <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-accent to-blue-600 text-sm font-bold text-white shadow-lg shadow-accent/30">
             Z
           </span>
-          <span className="font-display text-lg font-bold text-slate-900">ZZZ Lend</span>
+          <span className="font-display text-lg font-bold text-slate-900">OrbitFi</span>
         </Link>
         <nav className="hidden items-center gap-1 md:flex">
           {links.map((l) => (

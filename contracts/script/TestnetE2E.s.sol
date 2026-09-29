@@ -6,7 +6,7 @@ import {MockUSDC} from "../src/mocks/MockUSDC.sol";
 import {SwitchableOracle} from "../src/oracle/SwitchableOracle.sol";
 import {LendingPool} from "../src/LendingPool.sol";
 
-/// @title ZZZ Lend Sepolia 端到端测试脚本
+/// @title OrbitFi Sepolia 端到端测试脚本
 /// @dev 依赖 ./deployments/sepolia.json（由 Deploy.s.sol 生成）
 ///   用法：forge script script/TestnetE2E.s.sol:TestnetE2E --rpc-url $SEPOLIA_RPC_URL --broadcast -vvvv
 ///   每个用户用自己的私钥签名；各角色须持有测试网 ETH（抵押与 gas）。

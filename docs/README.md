@@ -1,4 +1,18 @@
-# ZZZ Lend 文档索引
+# OrbitFi 文档索引
+
+> **项目已更名：ZZZ Lend → OrbitFi**（2026-09-29）
+>
+> 前端界面、根 README、合约脚本与其注释、监控/脚本注释均已更新为 **OrbitFi**。
+>
+> 以下**刻意保留原名**，因为它们记录的是当时的事实，改名会破坏历史真实性：
+> - `docs/archive/` 下的全部历史文档
+> - 部分历史报告（如 `Fork主网dress rehearsal报告.md`、`代码审查报告_2026-09-15.md` 等）
+> - 文件名 `ZZZ_Lend_完整文档.md`（大量交叉引用指向它，重命名会断链）
+>
+> 另有两处**不能改**：
+> - `frontend/package.json` 的 `--project-name=zzz-lend` —— 这是 Cloudflare Pages 的线上项目名，
+>   改了会部署到新项目（域名变化）或直接失败
+> - Safe 多签在 `app.safe.global` 上的显示名 `zzz-lend` —— 界面可改，但与链上无关
 
 更新时间：2026-09-27
 

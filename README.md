@@ -1,4 +1,4 @@
-# ZZZ Lend
+# OrbitFi
 
 Risk-tiered DeFi lending protocol on **Base mainnet** / **Sepolia testnet**.
 
@@ -6,7 +6,7 @@ Risk-tiered DeFi lending protocol on **Base mainnet** / **Sepolia testnet**.
 
 ## Overview
 
-ZZZ Lend is a modular lending protocol: users deposit **USDC / USDT / DAI** to earn interest and borrow against **ETH / cbBTC** (Base V1) as collateral. Risk is controlled through **5-tier risk tiers (LTV/LT)**, with built-in liquidation, bad-debt handling, reserve, and Treasury split.
+OrbitFi is a modular lending protocol: users deposit **USDC / USDT / DAI** to earn interest and borrow against **ETH / cbBTC** (Base V1) as collateral. Risk is controlled through **5-tier risk tiers (LTV/LT)**, with built-in liquidation, bad-debt handling, reserve, and Treasury split.
 
 > ⚠️ **Status**: The protocol has passed Sepolia testnet validation (230 tests green) and Base mainnet fork dress rehearsal, **but has NOT yet undergone an external security audit**. Please assess risks yourself before any mainnet deployment, or contact a professional auditor.
 

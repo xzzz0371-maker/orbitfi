@@ -43,7 +43,7 @@ export function SupplyTab({ market }: { market: MarketInfo }) {
   return (
     <div className="space-y-4">
       <div className="rounded-lg bg-danger/10 px-3 py-2 text-xs text-danger">
-        ZZZ Lend is a transparent, non-custodial lending protocol. Depositors earn a share of
+        OrbitFi is a transparent, non-custodial lending protocol. Depositors earn a share of
         borrower interest, with 94% of interest passed back to depositors. Rates are variable and
         deposits are not principal-guaranteed. Please read the full Risk Disclosure before
         depositing.

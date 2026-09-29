@@ -15,7 +15,7 @@ import {ReserveManager} from "../src/ReserveManager.sol";
 import {RiskEngine} from "../src/risk/RiskEngine.sol";
 import {LendingPool} from "../src/LendingPool.sol";
 
-/// @title ZZZ Lend Sepolia V2 (multi-asset)
+/// @title OrbitFi Sepolia V2 (multi-asset)
 /// @dev
 ///   forge script script/Deploy.s.sol:Deploy --rpc-url $SEPOLIA_RPC_URL --broadcast --verify -vvvv
 ///          SEPOLIA_RPC_URL / PRIVATE_KEY / ETHERSCAN_API_KEY /
@@ -109,7 +109,7 @@ contract Deploy is Script {
 
         vm.stopBroadcast();
 
-        console2.log("=== ZZZ Lend Sepolia V2 ===");
+        console2.log("=== OrbitFi Sepolia V2 ===");
         console2.log("Deployer:      ", deployer);
         console2.log("TestnetAdmin:  ", testnetAdmin);
         console2.log("MockUSDC:      ", address(usdc));

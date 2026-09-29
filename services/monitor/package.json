@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "type": "module",
   "private": true,
-  "description": "ZZZ Lend poll-based monitoring/indexing scaffold (no user events -> view polling)",
+  "description": "OrbitFi poll-based monitoring/indexing scaffold (no user events -> view polling)",
   "scripts": {
     "build": "tsc --noEmit",
     "watch": "tsx src/index.ts --loop",
