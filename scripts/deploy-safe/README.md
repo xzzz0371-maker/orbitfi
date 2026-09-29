@@ -9,7 +9,13 @@
 > 优点：界面可见 owner/阈值、可后续管理；代码零风险。
 > 缺点：地址由 Safe 服务端生成，无法脚本预演（本仓库两条路径并存，视你偏好）。
 
-## 方式 B：脚本化（cast 调 SafeProxyFactory v1.4.1）
+## 方式 B：脚本化（cast 调 SafeProxyFactory **v1.4.1**）
+
+> ⚠️ 方式 B 创建的是 Safe **v1.4.1**。用官方界面（方式 A）创建得到的是 **v1.5.0**
+> （底层为 SafeL2 singleton `0xEdd160fEBBD92E350D4D398fb636302fccd67C7e`，2026-09-29 实测）。
+> 两个版本都能正常工作，**协议侧不关心 Safe 版本**（`DeployMainnet.s.sol` 只把 Safe 地址
+> 当作普通地址接受）。但不要混用两条路径。
+
 前提：本机有 `cast`（foundry 已装）。改 `deploy-safe.ps1` 里的 `O1/O2/O3` 与 `DEPLOYER_KEY`，然后：
 
 ```powershell
