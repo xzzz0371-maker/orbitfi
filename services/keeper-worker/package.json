@@ -1,0 +1,23 @@
+{
+  "name": "orbitfi-keeper-worker",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Cloudflare Worker + Cron that refreshes the ChainlinkOracle deviation baseline (updatePrice) for OrbitFi on Base.",
+  "type": "module",
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "dev": "wrangler dev --test-scheduled",
+    "dry-run": "wrangler deploy --dry-run --outdir dist",
+    "tail": "wrangler tail"
+  },
+  "devDependencies": {
+    "wrangler": "4.143.0"
+  },
+  "dependencies": {
+    "viem": "^2.56.1"
+  },
+  "optionalDependencies": {
+    "@cloudflare/workerd-windows-64": "1.20260929.1",
+    "@esbuild/win32-x64": "0.28.1"
+  }
+}

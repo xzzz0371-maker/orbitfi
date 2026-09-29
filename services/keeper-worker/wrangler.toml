@@ -1,0 +1,14 @@
+name = "orbitfi-keeper"
+main = "src/index.js"
+compatibility_date = "2024-11-01"
+compatibility_flags = ["nodejs_compat"]
+
+# 每小时跑一轮。oracle.maxStaleness 当前是 93600s（26h），
+# 所以 1h 有 26 倍余量 —— 就算连续几轮失败也不会把协议拖进 stale 状态。
+[triggers]
+crons = ["0 * * * *"]
+
+# 非敏感配置放这里；KEEPER_PRIVATE_KEY / TRIGGER_TOKEN 走 secret，不要写进这个文件。
+[vars]
+# RPC_URL = "https://base-rpc.publicnode.com"
+# ORACLE_ADDRESS = "0x1964A89320110B8f171CD737448C754c5aF768d7"
