@@ -100,11 +100,22 @@ function loadEnv() {
 // starts (it reports an empty stdout with status null), which makes a command that works
 // fine in a terminal look like it silently failed. Async spawn works in both.
 
+const WIN = process.platform === "win32";
+
+/** Windows: a bare `forge` / `cast` / `anvil` resolves through PATH via CreateProcess,
+ *  but .cmd / .bat cannot - they need cmd.exe. Never use shell:true with an args array:
+ *  Node 22+ flags that as DEP0190 (args are concatenated, not escaped). */
+function spawnExe(cmd, args, opts) {
+  if (WIN && /\.(cmd|bat)$/i.test(cmd)) {
+    return spawn(process.env.ComSpec || "cmd.exe", ["/d", "/s", "/c", cmd, ...args], opts);
+  }
+  return spawn(cmd, args, opts);
+}
+
 function run(cmd, args, { cwd = CONTRACTS, env = {}, quiet = false } = {}) {
   return new Promise((resolve) => {
-    const child = spawn(cmd, args, {
+    const child = spawnExe(cmd, args, {
       cwd,
-      shell: process.platform === "win32",
       env: { ...process.env, ...env },
       stdio: quiet ? ["ignore", "pipe", "pipe"] : "inherit",
     });
@@ -120,9 +131,8 @@ function run(cmd, args, { cwd = CONTRACTS, env = {}, quiet = false } = {}) {
 
 function capture(cmd, args, { cwd = CONTRACTS } = {}) {
   return new Promise((resolve) => {
-    const child = spawn(cmd, args, {
+    const child = spawnExe(cmd, args, {
       cwd,
-      shell: process.platform === "win32",
       stdio: ["ignore", "pipe", "pipe"],
     });
     let out = "";
@@ -353,7 +363,7 @@ function killFork(child) {
   try {
     if (process.platform === "win32") {
       // spawnSync is unusable here (EBUSY) - fire and forget.
-      spawn("taskkill", ["/PID", String(child.pid), "/T", "/F"], { stdio: "ignore" }).unref();
+      spawnExe("taskkill", ["/PID", String(child.pid), "/T", "/F"], { stdio: "ignore" }).unref();
     } else {
       process.kill(-child.pid, "SIGKILL");
     }
@@ -412,9 +422,8 @@ async function cmdDryRun(env) {
   // Capture anvil's output through pipes. Do NOT hand a file descriptor to a shell-wrapped
   // child on Windows: the process then silently fails to bind the port and the log file
   // stays empty, which is a miserable thing to debug.
-  const child = spawn("anvil", ["--fork-url", env.MAINNET_RPC_URL, "--port", String(FORK_PORT)], {
+  const child = spawnExe("anvil", ["--fork-url", env.MAINNET_RPC_URL, "--port", String(FORK_PORT)], {
     cwd: CONTRACTS,
-    shell: process.platform === "win32",
     detached: process.platform !== "win32",
     stdio: ["ignore", "pipe", "pipe"],
   });
@@ -518,7 +527,7 @@ async function cmdPost(env) {
   ok("frontend/src/lib/deployments/base.json updated");
 
   step("Building the frontend");
-  const build = await run("npm", ["run", "build"], { cwd: path.join(ROOT, "frontend") });
+  const build = await run(WIN ? "npm.cmd" : "npm", ["run", "build"], { cwd: path.join(ROOT, "frontend") });
   if (build.code !== 0) { bad("frontend build failed"); process.exit(1); }
   ok("build succeeded");
 
