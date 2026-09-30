@@ -71,6 +71,16 @@ if ($LASTEXITCODE -ne 0 -or -not $raw) { Fail "cast wallet new failed." }
 $parsed = $raw | ConvertFrom-Json
 $wallet = $parsed.data[0]
 if (-not $wallet.address -or -not $wallet.private_key) { Fail "could not parse cast wallet new output." }
+
+# Self-check the EIP-55 checksum. `cast wallet new` normally emits it correctly,
+# but this address gets copied BY EYE into explorer and multisig UIs, and a
+# wrong-case variant is rejected there as "invalid address checksum". Asserting
+# it here means the printed address is always paste-ready.
+$canonical = (& cast to-checksum $wallet.address).Trim()
+if ($canonical -ne $wallet.address) {
+    Fail "cast wallet new emitted a non-EIP-55 address ('$($wallet.address)'); refusing to continue."
+}
+$wallet.address = $canonical
 Write-Host "Generated (address withheld until the secret is confirmed):" -ForegroundColor DarkGray
 Write-Host "    ...$($wallet.address.Substring($wallet.address.Length - 6))" -ForegroundColor DarkGray
 
