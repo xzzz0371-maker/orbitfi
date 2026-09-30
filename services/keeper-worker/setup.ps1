@@ -9,11 +9,18 @@
 # Cloudflare secret store via `wrangler deploy --secrets-file`, and the temp
 # file is then overwritten and deleted.
 #
-# `--secrets-file` is used rather than `wrangler secret bulk` on purpose:
-# bulk prompts "There doesn't seem to be a Worker called ... Do you want to
-# create a new Worker with that name and add secrets to it?" when the Worker
-# does not exist yet. `deploy --secrets-file` creates the Worker and attaches
-# the secret in a single non-interactive operation.
+# Design rules learned the hard way - do not "simplify" these away:
+#
+#  1. `--secrets-file` on deploy, NOT `secret bulk`. bulk prompts
+#     "There doesn't seem to be a Worker called ... Do you want to create a new
+#     Worker with that name and add secrets to it?" when the Worker does not
+#     exist yet, and it exits 0 even when the operator answers no. That exit
+#     code is therefore worthless as a success signal.
+#
+#  2. The address is announced ONLY after the secret is confirmed present in
+#     the Worker. A wallet whose key has been wiped looks exactly like a
+#     working one to anyone reading the output, and funding it burns the money
+#     permanently. Never print a fundable-looking address before verification.
 #
 # Run from anywhere:
 #     powershell -ExecutionPolicy Bypass -File services\keeper-worker\setup.ps1
@@ -48,8 +55,8 @@ foreach ($cand in @(
 }
 if (-not $Wrangler) {
     $onPath = Get-Command wrangler -ErrorAction SilentlyContinue
-    # No backticks in this message: inside a double-quoted PowerShell string a
-    # backtick is an escape character, and `n would turn into a newline.
+    # No backticks in this message: inside a double-quoted PS string a backtick
+    # is an escape character, and backtick-n would become a newline.
     if ($onPath) { $Wrangler = $onPath.Source } else { Fail "wrangler not found. Run 'npm install' in services\keeper-worker first." }
 }
 Write-Host "Using wrangler: $Wrangler"
@@ -64,29 +71,32 @@ if ($LASTEXITCODE -ne 0 -or -not $raw) { Fail "cast wallet new failed." }
 $parsed = $raw | ConvertFrom-Json
 $wallet = $parsed.data[0]
 if (-not $wallet.address -or -not $wallet.private_key) { Fail "could not parse cast wallet new output." }
-
-# Print the address BEFORE anything that can fail. If a later step dies, the
-# key is wiped and this address is the only trace - it must not stay a secret.
-Write-Host ""
-Write-Host "  HOT WALLET ADDRESS" -ForegroundColor Yellow
-Write-Host "    $($wallet.address)" -ForegroundColor Yellow
-Write-Host ""
+Write-Host "Generated (address withheld until the secret is confirmed):" -ForegroundColor DarkGray
+Write-Host "    ...$($wallet.address.Substring($wallet.address.Length - 6))" -ForegroundColor DarkGray
 
 # --- deploy + attach the secret atomically -----------------------------------
 # Written with the .NET file API (ASCII, no BOM) rather than a text cmdlet:
-# PowerShell 5.1 would otherwise pick its own encoding, and that is how these
-# files get silently mangled on a non-ASCII path.
+# PS 5.1 would otherwise pick its own encoding, and that is how these files get
+# silently mangled on a non-ASCII path.
 $deployOk = $false
+$secretOk = $false
 try {
     $payload = @{ KEEPER_PRIVATE_KEY = $wallet.private_key } | ConvertTo-Json -Compress
     [System.IO.File]::WriteAllText($TmpFile, $payload, [System.Text.Encoding]::ASCII)
 
+    Write-Host ""
     Write-Host "Deploying the Worker and attaching the secret..." -ForegroundColor Cyan
     & $Wrangler deploy --secrets-file $TmpFile -c $Config
-    # Only record success. Do NOT call exit/Fail in here: exiting from inside a
-    # try block is not a reliable way to still run the finally below, and the
-    # finally is what wipes the private key off disk.
+    # Only record outcomes here. Do NOT exit/Fail inside the try: exiting from a
+    # try block is not a reliable way to still run the finally, and the finally
+    # is what wipes the key off disk.
     $deployOk = ($LASTEXITCODE -eq 0)
+
+    if ($deployOk) {
+        # Exit code alone proves nothing here - confirm the binding really exists.
+        $listOut = (& $Wrangler secret list -c $Config 2>&1 | Out-String)
+        $secretOk = $listOut -match "KEEPER_PRIVATE_KEY"
+    }
 }
 finally {
     if (Test-Path $TmpFile) {
@@ -97,15 +107,29 @@ finally {
     }
 }
 
-if (-not $deployOk) {
-    Fail "wrangler deploy failed. The wallet holds no funds yet, so nothing was lost - safe to re-run."
+# --- report ------------------------------------------------------------------
+# The key is gone either way by now, so an unverified wallet is worthless. Say
+# so loudly rather than printing an address that looks fundable.
+if (-not ($deployOk -and $secretOk)) {
+    Write-Host ""
+    Write-Host "DO NOT SEND ANY FUNDS TO THIS WALLET." -ForegroundColor Red -BackgroundColor Black
+    Write-Host ""
+    Write-Host "  $($wallet.address)" -ForegroundColor Red
+    Write-Host ""
+    Write-Host "The key for it was wiped when this run ended, so anything sent to it"
+    Write-Host "would be unrecoverable. It currently holds nothing, so nothing was lost."
+    Write-Host ""
+    if (-not $deployOk) { Write-Host "Reason: wrangler deploy failed." -ForegroundColor Red }
+    else { Write-Host "Reason: deploy succeeded but the secret binding KEEPER_PRIVATE_KEY is not present on the Worker." -ForegroundColor Red }
+    Write-Host ""
+    Write-Host "Fix that first, then re-run this script to get a fresh wallet." -ForegroundColor Yellow
+    exit 1
 }
 
-# --- what the operator still has to do ---------------------------------------
 Write-Host ""
-Write-Host "Done. Worker deployed with an hourly cron." -ForegroundColor Green
+Write-Host "Done. Worker deployed with an hourly cron, secret confirmed." -ForegroundColor Green
 Write-Host ""
-Write-Host "  NEXT: send Base ETH to this address"
+Write-Host "  FUND THIS ADDRESS with Base ETH" -ForegroundColor Yellow
 Write-Host "    $($wallet.address)" -ForegroundColor Yellow
 Write-Host ""
 Write-Host "  Suggested funding: 0.01 ETH (~7 months hourly). 0.001 ETH lasts about 3 weeks."

@@ -50,18 +50,40 @@ powershell -ExecutionPolicy Bypass -File services\keeper-worker\setup.ps1
 
 脚本会：
 
-1. `cast wallet new` 生成一个**全新**热钱包，**立刻打印地址**（万一后面失败，地址不会丢）
+1. `cast wallet new` 生成一个**全新**热钱包（**先不公布地址**，见下）
 2. 私钥写入临时文件
 3. `wrangler deploy --secrets-file <临时文件>` —— **一条命令同时建 Worker + 挂 secret**
-4. **覆写并删除**临时文件
+4. 用 `wrangler secret list` **确认 secret 真的挂上了**
+5. **覆写并删除**临时文件
+6. 只有第 4 步确认通过，才把地址作为「可以转钱」公布
 
 **私钥全程不上屏、不进命令行参数、不经过任何人。**
 
-> **为什么用 `deploy --secrets-file` 而不是 `wrangler secret bulk`**：
-> `secret bulk` 在 Worker 还不存在时会停下来问
-> 「There doesn't seem to be a Worker called "orbitfi-keeper". Do you want to create…」
-> —— 第一次跑必然卡在这个交互上。`deploy --secrets-file` 是原子的、非交互的，
-> 顺带把 Worker 建出来。**这个坑已经踩过一次，别再改回去。**
+### 两条必须守住的规则（都是踩过坑换来的）
+
+**① 用 `deploy --secrets-file`，不要用 `wrangler secret bulk`。**
+`secret bulk` 在 Worker 不存在时会停下来问
+「There doesn't seem to be a Worker called "orbitfi-keeper". Do you want to create…」，
+而且**即使用户回答「否」它仍然以退出码 0 结束** —— 所以它的退出码根本不能当作成功信号。
+`deploy --secrets-file` 是原子的、非交互的，顺带把 Worker 建出来。
+
+**② 地址只在 secret 确认存在之后才公布。**
+一个密钥已被擦除的钱包，在输出里和正常钱包**长得一模一样**。如果把地址先打出来、
+后面却失败了，用户照样可能往里转钱，而那是**永久损失**。
+所以脚本失败时的输出是：
+
+```
+DO NOT SEND ANY FUNDS TO THIS WALLET.
+
+  0x…（地址）
+
+The key for it was wiped when this run ended, so anything sent to it
+would be unrecoverable. It currently holds nothing, so nothing was lost.
+
+Reason: wrangler deploy failed.
+```
+
+并且以退出码 1 结束。**这两条都不要为了「简化」而改掉。**
 
 > `cast` 需要已安装 Foundry；`wrangler` 会优先用本目录或 `frontend/node_modules` 里的。
 
@@ -168,7 +190,9 @@ curl "http://127.0.0.1:8787/__scheduled?cron=0+*+*+*+*"
 | `secret list` / `secret delete` | ✅ 挂载与删除都验证过，删完 `secret list` 返回 `[]` |
 | 本地 `wrangler dev` 跑 GET 健康检查 | ✅ 地址、余额、gas、`maxDeviationPct=20`、`paused=false`、5 个资产全部正确 |
 | 本地触发 scheduled 全链路 | ✅ 5 个资产逐个 ABI 编码 → 估气 → 发送；用 0 余额测试钱包验证，失败点正是「余额不足」，**无交易上链** |
-| `setup.ps1` 语法与编码 | ✅ PowerShell 解析器 **0 错误**；**纯 ASCII**（0 个非 ASCII 字节），PS 5.1 不会读乱码 |
+| `setup.ps1` 语法与编码 | ✅ 解析器 **0 错误**；**纯 ASCII**（0 个非 ASCII 字节），PS 5.1 不会读乱码 |
+| **失败分支（防误转钱）** | ✅ 故意把配置指向不存在的文件强制失败：输出 `DO NOT SEND ANY FUNDS TO THIS WALLET` + 原因 + **退出码 1**，且**没有**把地址当作可转入目标公布 |
+| `secret list` 匹配逻辑 | ✅ 双向验证：有 secret 时输出含 `"name": "KEEPER_PRIVATE_KEY"`，没有时是 `[]` —— 与脚本的判定一致 |
 
 > ⚠️ **尚未在真实资金下跑过**：上面用的是余额为 0 的一次性测试私钥，
 > 所以「交易真的上链并成功」这一步要等你转完 gas 后由第一次 cron 验证。
