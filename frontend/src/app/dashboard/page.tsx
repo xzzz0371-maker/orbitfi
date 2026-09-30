@@ -12,8 +12,9 @@ import { WithdrawTab } from "@/components/dashboard/WithdrawTab";
 import { BorrowTab } from "@/components/dashboard/BorrowTab";
 import { RepayTab } from "@/components/dashboard/RepayTab";
 import { CollateralTab } from "@/components/dashboard/CollateralTab";
+import { TreasuryPanel } from "@/components/dashboard/TreasuryPanel";
 
-const TABS = ["Supply", "Withdraw", "Borrow", "Repay", "Collateral"] as const;
+const TABS = ["Supply", "Withdraw", "Borrow", "Repay", "Collateral", "Treasury"] as const;
 
 export default function DashboardPage() {
   return (
@@ -115,6 +116,7 @@ function DashboardInner() {
             {tab === 4 && (
               <CollateralTab prices={prices} pricesReady={pricesReady} pricesLoading={pricesLoading} />
             )}
+            {tab === 5 && <TreasuryPanel market={market} />}
           </div>
         </div>
       </div>
