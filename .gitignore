@@ -35,3 +35,7 @@ screenshots/
 # ---------- 内部文档（不推送公开仓库） ----------
 docs/archive/任务记录.md
 docs/archive/ZZZ_Lend_检查报告_*.html
+
+# ---------- 工具本地状态（不推送） ----------
+.wrangler/
+.workbuddy/

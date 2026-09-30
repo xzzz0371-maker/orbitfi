@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { ADDRESSES, ETHERSCAN_URL } from "@/lib/config";
 
 export function Footer() {
@@ -6,9 +7,13 @@ export function Footer() {
       <div className="mx-auto grid max-w-6xl gap-8 px-4 py-10 md:grid-cols-3">
         <div>
           <div className="flex items-center gap-2">
-            <span className="flex h-6 w-6 items-center justify-center rounded-md bg-gradient-to-br from-accent to-blue-600 text-xs font-bold text-white">
-              Z
-            </span>
+            <Image
+              src="/brand/logo-symbol.png"
+              alt="OrbitFi"
+              width={24}
+              height={24}
+              className="h-6 w-6 rounded-md"
+            />
             <span className="font-display text-sm font-bold text-slate-800">OrbitFi</span>
           </div>
           <p className="mt-3 text-xs leading-relaxed text-slate-500">

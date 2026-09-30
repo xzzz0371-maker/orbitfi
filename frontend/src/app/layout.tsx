@@ -5,6 +5,10 @@ import { NavBar } from "@/components/NavBar";
 import { Footer } from "@/components/Footer";
 
 export const metadata: Metadata = {
+  // Open Graph / Twitter cards resolve og:image against this base. Without it they
+  // fall back to http://localhost:3000, which no crawler can fetch.
+  // ⚠️ 换自有域名后改这里 —— 这又是一个「域名硬编码点」（见 docs/钱包安全警告排查-MetaMask.md）。
+  metadataBase: new URL("https://orbitfi.pages.dev"),
   title: "OrbitFi — Risk-Layered DeFi Lending",
   description:
     "Choose your risk tier, borrow against ETH, and earn on USDC. Estimated yields, no fixed income promises.",

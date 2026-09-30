@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { ConnectButton } from "./ConnectButton";
 
@@ -18,9 +19,14 @@ export function NavBar() {
     <header className="sticky top-0 z-30 border-b border-slate-200/60 bg-white/60 backdrop-blur-xl">
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3">
         <Link href="/" className="flex items-center gap-2">
-          <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-accent to-blue-600 text-sm font-bold text-white shadow-lg shadow-accent/30">
-            Z
-          </span>
+          <Image
+            src="/brand/logo-symbol.png"
+            alt="OrbitFi"
+            width={32}
+            height={32}
+            className="h-8 w-8 rounded-xl shadow-lg shadow-accent/20"
+            priority
+          />
           <span className="font-display text-lg font-bold text-slate-900">OrbitFi</span>
         </Link>
         <nav className="hidden items-center gap-1 md:flex">
