@@ -48,16 +48,41 @@
 powershell -ExecutionPolicy Bypass -File services\keeper-worker\setup.ps1
 ```
 
-脚本会依次做四件事：
+脚本会：
 
-1. `cast wallet new` 生成一个**全新**热钱包
-2. 私钥写入临时文件 → `wrangler secret bulk` 上传为 Cloudflare secret → **覆写并删除临时文件**
-3. `wrangler deploy` 部署 Worker（含每小时 cron）
-4. 打印**热钱包地址**，等你转 gas
+1. `cast wallet new` 生成一个**全新**热钱包，**立刻打印地址**（万一后面失败，地址不会丢）
+2. 私钥写入临时文件
+3. `wrangler deploy --secrets-file <临时文件>` —— **一条命令同时建 Worker + 挂 secret**
+4. **覆写并删除**临时文件
 
 **私钥全程不上屏、不进命令行参数、不经过任何人。**
 
-> 脚本里 `cast` 需要已安装 Foundry；`wrangler` 会优先用本目录或 `frontend/node_modules` 里的。
+> **为什么用 `deploy --secrets-file` 而不是 `wrangler secret bulk`**：
+> `secret bulk` 在 Worker 还不存在时会停下来问
+> 「There doesn't seem to be a Worker called "orbitfi-keeper". Do you want to create…」
+> —— 第一次跑必然卡在这个交互上。`deploy --secrets-file` 是原子的、非交互的，
+> 顺带把 Worker 建出来。**这个坑已经踩过一次，别再改回去。**
+
+> `cast` 需要已安装 Foundry；`wrangler` 会优先用本目录或 `frontend/node_modules` 里的。
+
+## 当前部署状态
+
+Worker 已经部署好了（我这边跑过一次验证）：
+
+| 项 | 值 |
+|---|---|
+| 名称 | `orbitfi-keeper` |
+| URL | `https://orbitfi-keeper.xzzz0371.workers.dev` |
+| Cron | `0 * * * *`（每小时） |
+| Secret | **未设置**（验证用的假密钥已删除） |
+
+也就是说：**现在跑 `setup.ps1` 会生成真钱包、把 secret 挂上、重新部署一次**。
+在此之前每小时会跑一轮但什么都不做（日志里是 `KEEPER_PRIVATE_KEY is not set`），**这是预期的、无害的**。
+
+> ⚠️ **`workers.dev` 在部分网络下被 DNS 污染**（本机实测解析到 `31.13.85.53` /
+> `2a03:2880:…:face:b00c`，是 Meta 的 IP 段）。
+> **但这不影响 keeper** —— Cron 是 Cloudflare 内部触发的，根本不走 `workers.dev` 的 DNS。
+> 只有「手动打开健康检查网址」这一件事会失败，改用下面的 `npm run tail` 看日志即可。
 
 ## 然后：转 gas
 
@@ -86,23 +111,35 @@ powershell -ExecutionPolicy Bypass -File services\keeper-worker\setup.ps1
 
 ## 验证
 
+**首选方式是看日志**（`workers.dev` 可能被 DNS 污染，日志走的是 Cloudflare API，不受影响）：
+
 ```bash
-# 只读健康检查：余额、gas、偏差阈值、oracle 是否暂停、参与资产
-curl https://orbitfi-keeper.<你的子域>.workers.dev
+cd services/keeper-worker
+npm run tail
+```
+
+转完 gas 后的第一个整点，日志里应该出现：
+
+```json
+{"ok":true,"sent":5,"total":5,"anomalous":[],
+ "balanceEth":"0.01","lowBalance":false,"gasPriceGwei":"0.005","maxDeviationPct":20,
+ "results":[{"symbol":"USDC","ok":true,"tx":"0x…"}, …]}
+```
+
+`"sent":5` 就是成功。`"anomalous"` 非空才需要人工介入。
+
+如果网络能通 `workers.dev`，也可以直接看健康检查（只读，不写链）：
+
+```bash
+curl https://orbitfi-keeper.xzzz0371.workers.dev
 ```
 
 期望输出：
 
 ```json
 {"ok":true,"address":"0x…","balanceEth":"0.01","lowBalance":false,
- "gasPriceGwei":"0.006","maxDeviationPct":20,"paused":false,
+ "gasPriceGwei":"0.005","maxDeviationPct":20,"paused":false,
  "assets":["USDC","USDT","DAI","ETH","cbBTC"]}
-```
-
-看运行日志：
-
-```bash
-cd services/keeper-worker && npm run tail
 ```
 
 手动触发一轮（需先设 `TRIGGER_TOKEN` secret）：
@@ -126,12 +163,15 @@ curl "http://127.0.0.1:8787/__scheduled?cron=0+*+*+*+*"
 | 项 | 结果 |
 |---|---|
 | `wrangler deploy --dry-run` 打包 | ✅ 797 KiB / **gzip 154 KiB**（免费额度内） |
+| **真实部署** | ✅ Worker `orbitfi-keeper` 已建，**cron `0 * * * *` 已挂上** |
+| `deploy --secrets-file` 原子挂 secret | ✅ 部署输出里出现 `env.KEEPER_PRIVATE_KEY ("(hidden)")`，无任何交互 |
+| `secret list` / `secret delete` | ✅ 挂载与删除都验证过，删完 `secret list` 返回 `[]` |
 | 本地 `wrangler dev` 跑 GET 健康检查 | ✅ 地址、余额、gas、`maxDeviationPct=20`、`paused=false`、5 个资产全部正确 |
 | 本地触发 scheduled 全链路 | ✅ 5 个资产逐个 ABI 编码 → 估气 → 发送；用 0 余额测试钱包验证，失败点正是「余额不足」，**无交易上链** |
+| `setup.ps1` 语法与编码 | ✅ PowerShell 解析器 **0 错误**；**纯 ASCII**（0 个非 ASCII 字节），PS 5.1 不会读乱码 |
 
-> ⚠️ **尚未在真实资金下跑过**：上面用的是一次性测试私钥（余额 0），
+> ⚠️ **尚未在真实资金下跑过**：上面用的是余额为 0 的一次性测试私钥，
 > 所以「交易真的上链并成功」这一步要等你转完 gas 后由第一次 cron 验证。
-> 第一次跑完请用 `npm run tail` 看日志里的 `"sent":5`。
 
 ## 与 `services/monitor` 的关系
 
